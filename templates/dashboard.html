@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="60">
+    <title>Winston-Salem Bird Station</title>
+    <meta name="description" content="A live, always-on bird-listening project in a Winston-Salem, NC backyard. See and hear which birds are singing right now — a fun way to explore backyard birds and local birdwatching in the Triad, NC area.">
+    <meta property="og:title" content="Winston-Salem Bird Station">
+    <meta property="og:description" content="See and hear which birds are singing right now in a Winston-Salem, NC backyard — a fun way to explore local birdwatching in the Triad.">
+    <meta property="og:image" content="https://winstonsalembirds.com/static/history/01_garden.jpg">
+    <meta property="og:url" content="https://winstonsalembirds.com/">
+    <meta property="og:type" content="website">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Winston-Salem Bird Station",
+      "url": "https://winstonsalembirds.com/",
+      "description": "Live acoustic bird detection station in Winston-Salem, NC, using BirdNET-Pi to identify local bird species in real time by sound."
+    }
+    </script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f6f8; color: #333; }
+        .container { display: flex; flex-direction: column; gap: 25px; max-width: 1300px; margin: 0 auto; }
+        .row-top { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+        .live-cam { flex: 1; min-width: 320px; background: #000; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .live-cam img { width: 100%; height: auto; display: block; }
+        .table-section { flex: 2; min-width: 600px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .chart-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .current-val { font-size: 1.5rem; font-weight: bold; margin-bottom: 10px; color: #2c3e50; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        td:nth-child(4), td:nth-child(5), th:nth-child(4), th:nth-child(5) { text-align: center; }
+        th { background-color: #f8f9fa; }
+        .bird-thumb { width: 45px; height: 45px; object-fit: cover; border-radius: 4px; border: 1px solid #ccc; transform: scale(1.3); }
+        .wiki-link { color: #0066cc; text-decoration: none; font-weight: bold; }
+        .nav-bar { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; max-width:640px; margin:0 auto; }
+        .nav-link { flex:1; min-width:140px; text-align:center; background:white; border:2px solid #1a1a1a; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); padding:14px 22px; color:#2c3e50; font-weight:bold; text-decoration:none; font-size:1rem; transition:0.15s; }
+        .nav-link:hover { box-shadow:0 4px 8px rgba(0,0,0,0.15); transform:translateY(-1px); }
+        canvas { width: 100% !important; height: 200px !important; }
+        .full-width-chart { grid-column: 1 / -1; }
+        .full-width-chart canvas { height: 280px !important; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-2V6321XXM0"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag("js", new Date());
+  gtag("config", "G-2V6321XXM0");
+</script>
+</head>
+<body>
+
+<div class="container">
+    <div style="text-align:center;margin-bottom:15px;">
+        <h1 style="margin:0;color:#2c3e50;">Winston-Salem Bird Station</h1>
+        <p style="margin:5px 0 0;color:#888;font-size:0.85rem;">{{ page_generated }}</p>
+        <p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Raspberry Pi 4 · Ecowitt WittBoy 7-in-1 Weather Station · Cornell Lab BirdNET-Pi Acoustic Recognition</p>
+        <p style="margin:5px 0 0;color:#999;font-size:0.8rem;">Questions or feedback: <a href="mailto:winstonsalemanalytics@gmail.com" style="color:#0066cc;text-decoration:none;">winstonsalemanalytics@gmail.com</a></p>
+    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:20px;">
+    {% if early_bird %}
+    <div style="background:linear-gradient(135deg,#fff9db,#ffe58a);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:8px 14px;margin:0;max-width:480px;white-space:nowrap;display:flex;align-items:center;gap:10px;justify-content:center;">
+        <img id="img-earlybird" class="bird-thumb" data-sci="{{ early_bird.sci_name }}" src="" style="width:46px;height:46px;border-radius:8px;object-fit:cover;background:#eee;">
+        <span style="font-size:0.95rem;color:#1a4a6e;"><span style="font-size:1.5rem;vertical-align:middle;">☀️</span> <strong>Early Bird Award</strong> : <strong>{{ early_bird.com_name }}</strong> at {{ early_bird.time }}!</span>
+    </div>
+    {% endif %}
+    {% if night_owl %}
+    <div style="background:linear-gradient(135deg,#1e2a3a,#2c3e50);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:8px 14px;margin:0;max-width:480px;white-space:nowrap;display:flex;align-items:center;gap:10px;justify-content:center;">
+        <img id="img-nightowl" class="bird-thumb" data-sci="{{ night_owl.sci_name }}" src="" style="width:46px;height:46px;border-radius:8px;object-fit:cover;background:#eee;">
+        <span style="font-size:0.95rem;color:#f0f4f8;"><span style="font-size:1.5rem;vertical-align:middle;">🦉</span> <strong>Night Owl Award</strong> : <strong>{{ night_owl.com_name }}</strong> at {{ night_owl.time }}!</span>
+    </div>
+    {% endif %}
+    </div>
+    </div>
+
+    <div class="nav-bar"><a href="/alltime" class="nav-link">All-Time Species</a><a href="/bird-models" class="nav-link">Bird Models</a><a href="/dueling-models" class="nav-link">Dueling Models</a><a href="/history" class="nav-link">Project History</a><a href="/analytics" class="nav-link">View Analytics</a></div>
+    <div style="background:white;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:14px 20px;margin:16px auto 0;max-width:480px;text-align:center;"><p style="margin:0 0 10px;color:#2c3e50;font-weight:bold;">Get notified when something interesting shows up</p><form id="subscribe-form" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;"><input type="email" id="subscribe-email" placeholder="your@email.com" required style="padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:0.9rem;min-width:200px;"><button type="submit" style="padding:8px 16px;border-radius:6px;border:2px solid #1a1a1a;background:white;font-weight:bold;cursor:pointer;">Notify Me</button></form><p id="subscribe-msg" style="margin:8px 0 0;font-size:0.85rem;color:#2e7d32;display:none;">Thanks — you're on the list!</p></div>
+    {% if ebird_sightings %}
+    <div style="background:white;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:10px 18px;margin-bottom:5px;font-size:0.85rem;color:#555;display:flex;flex-wrap:wrap;gap:16px;align-items:center;">
+        <strong style="color:#2c3e50;">Nearby eBird Sightings:</strong>
+        {% for s in ebird_sightings %}
+        <span>{{ s.name }} <small style="color:#999;">({{ s.loc }}, {{ s.date }})</small></span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="row-top">
+        <div class="live-cam">
+            <img src="/static/{{ current_image }}" alt="Live Yard Feed" id="liveFeedImg" onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.src.split('?')[0]+'?retry='+Date.now();},500);}">
+        </div>
+
+        <div class="table-section">
+            <h2>Latest Species Detected</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Photo</th>
+                        <th>Common Name</th>
+                        <th>Last Heard</th>
+                        <th>Detections</th>
+                        <th>Avg Conf</th>
+                        <th>Info</th>
+                        <th>Play Last Detection</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bird in birds %}
+                    <tr>
+                        <td>
+                            <a id="link-{{ loop.index }}" href="#" target="_blank">
+                            <img class="bird-thumb" id="img-{{ loop.index }}" data-sci="{{ bird[1] }}"
+                                 alt="{{ bird[0] }}"
+                                 src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='45' height='45'><circle cx='22' cy='22' r='20' fill='%23eee'/></svg>">
+                            </a>
+                        </td>
+                        <td><strong>{{ bird[0] }}</strong><br><small style="color:#666;">{{ bird[1] }}</small></td>
+                        <td>{{ bird[2][5:7]|int }}/{{ bird[2][8:10] }}  {{ (bird[2].split(' ')[1][:5] if ' ' in bird[2] else bird[2][:5]) }}</td>
+                        <td>{{ bird[3] }}</td>
+                        <td>{{ bird[4]|int }}%</td>
+                        <td><a class="wiki-link" href="https://en.wikipedia.org/wiki/{{ bird[0]|urlencode }}" target="_blank">Wiki ↗</a></td>
+                        <td>
+                            {% if bird[5] and bird[6] %}
+                            <audio controls style="width:150px;height:30px;">
+                                <source src="/audio/{{ bird[6] }}/{{ bird[0].replace(' ', '_') }}/{{ bird[5] }}" type="audio/mpeg">
+                            </audio>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <div class="chart-card">
+            <h3>Temperature</h3>
+            <div class="current-val">{{ temps[-1] if temps else '--' }} °F</div>
+            <canvas id="tempChart"></canvas>
+        </div>
+
+        <div class="chart-card">
+            <h3>Humidity</h3>
+            <div class="current-val">{{ humidities[-1] if humidities else '--' }} %</div>
+            <canvas id="humidityChart"></canvas>
+        </div>
+
+        <div class="chart-card">
+            <h3>Barometric Pressure</h3>
+            <div class="current-val">{{ pressures[-1] if pressures else '--' }} inHg</div>
+            <canvas id="pressureChart"></canvas>
+        </div>
+
+        <div class="chart-card">
+            <h3>Wind Speed / Gust</h3>
+            <div class="current-val">{{ windspeeds[-1] if windspeeds else '--' }} mph</div>
+            <canvas id="windChart"></canvas>
+        </div>
+
+        <div class="chart-card">
+            <h3>Solar Radiation</h3>
+            <div class="current-val">{{ solar[-1] if solar else '--' }} W/m²</div>
+            <canvas id="solarChart"></canvas>
+        </div>
+
+        <div class="chart-card">
+            <h3>Daily Rain Total</h3>
+            <div class="current-val">{{ dailyrains[-1] if dailyrains else '--' }} in</div>
+            <canvas id="dailyrainChart"></canvas>
+        </div>
+
+        <div class="chart-card" style="background:#0d1b2a;">
+            <h3 style="color:#e8e8e8;">Daylight Dial</h3>
+            <div id="sunDial"></div>
+            <div style="color:#7fd8ff;font-size:0.8rem;margin-top:8px;">
+                Sunrise {{ sun_times.sunrise }} &middot; Sunset {{ sun_times.sunset }}
+            </div>
+        </div>
+
+        <div class="chart-card full-width-chart">
+            <h3>15-Minute Bird Activity Trend</h3>
+            <canvas id="birdChart"></canvas>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    document.querySelectorAll('.bird-thumb').forEach(img => {
+        const sciNameRaw = img.getAttribute('data-sci');
+        if (!sciNameRaw) return;
+        const sciName = sciNameRaw.split(' ').slice(0, 2).join(' ');
+        fetch(`https://en.wikipedia.org/w/api.php?action=query&redirects=1&titles=${encodeURIComponent(sciName)}&prop=pageimages&format=json&pithumbsize=100&origin=*`)
+            .then(r => r.json()).then(d => {
+                const p = d.query.pages; const id = Object.keys(p)[0];
+                if (id !== "-1" && p[id] && p[id].thumbnail) {
+                    img.src = p[id].thumbnail.source;
+                }
+            })
+            .catch(() => {});
+        fetch(`https://en.wikipedia.org/w/api.php?action=query&redirects=1&titles=${encodeURIComponent(sciName)}&prop=pageimages&format=json&pithumbsize=800&origin=*`)
+            .then(r => r.json()).then(d => {
+                const p = d.query.pages; const id = Object.keys(p)[0];
+                const link = document.getElementById(img.id.replace("img-", "link-"));
+                if (id !== "-1" && p[id] && p[id].thumbnail && link) {
+                    link.href = p[id].thumbnail.source;
+                }
+            })
+            .catch(() => {});
+    });
+
+    const sharedOptions = {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+            x: { type: 'time', time: { parser: 'yyyy-MM-dd HH:mm:ss', unit: 'hour', displayFormats: { hour: 'MMM d, HH:mm' } } },
+            y: { ticks: { stepSize: 1, callback: function(value) { return value % 1 === 0 ? value : ''; } } }
+        }
+    };
+
+    const labels = {{ weather_labels|tojson }};
+
+    new Chart(document.getElementById('tempChart'), {
+        type: 'line', data: { labels: labels, datasets: [{ label: '°F', data: {{ temps|tojson }}, borderColor: '#ff9f43', fill: false }] }, options: sharedOptions
+    });
+    new Chart(document.getElementById('humidityChart'), {
+        type: 'line', data: { labels: labels, datasets: [{ label: '%', data: {{ humidities|tojson }}, borderColor: '#9b59b6', fill: false }] }, options: sharedOptions
+    });
+    new Chart(document.getElementById('pressureChart'), {
+        type: 'line', data: { labels: labels, datasets: [{ label: 'inHg', data: {{ pressures|tojson }}, borderColor: '#3498db', fill: false }] }, options: sharedOptions
+    });
+    new Chart(document.getElementById('windChart'), {
+        type: 'line', data: { labels: labels, datasets: [
+            { label: 'Speed (mph)', data: {{ windspeeds|tojson }}, borderColor: '#16a085', fill: false },
+            { label: 'Gust (mph)', data: {{ windgusts|tojson }}, borderColor: '#e74c3c', fill: false }
+        ] }, options: sharedOptions
+    });
+    new Chart(document.getElementById('solarChart'), {
+        type: 'line', data: { labels: labels, datasets: [{ label: 'W/m²', data: {{ solar|tojson }}, borderColor: '#f39c12', fill: false }] }, options: sharedOptions
+    });
+    new Chart(document.getElementById('dailyrainChart'), {
+        type: 'line', data: { labels: labels, datasets: [{ label: 'in', data: {{ dailyrains|tojson }}, borderColor: '#1abc9c', fill: true, backgroundColor: 'rgba(26,188,156,0.1)' }] }, options: sharedOptions
+    });
+
+    (function() {
+        const cx = 90, cy = 90, r = 75;
+        const sunrisePct = {{ sun_times.sunrise_pct }};
+        const sunsetPct = {{ sun_times.sunset_pct }};
+        const nowPct = {{ sun_times.now_pct }};
+
+        function pctToXY(pct) {
+            const angle = (pct / 100) * 360 - 90;
+            const rad = angle * Math.PI / 180;
+            return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+        }
+
+        const [sx, sy] = pctToXY(sunrisePct);
+        const [ex, ey] = pctToXY(sunsetPct);
+        const largeArc = (sunsetPct - sunrisePct) > 50 ? 1 : 0;
+        const [nx, ny] = pctToXY(nowPct);
+
+        const svg = `
+        <svg viewBox="0 0 180 180" width="180" height="180" style="margin:0 auto;display:block;">
+            <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#274b6d" stroke-width="2"/>
+            <path d="M ${cx} ${cy} L ${sx} ${sy} A ${r} ${r} 0 ${largeArc} 1 ${ex} ${ey} Z"
+                  fill="rgba(255,159,67,0.25)" stroke="#ff9f43" stroke-width="1.5"/>
+            <circle cx="${nx}" cy="${ny}" r="6" fill="#7fd8ff" stroke="#e8e8e8" stroke-width="1.5">
+                <animate attributeName="r" values="5;7;5" dur="2s" repeatCount="indefinite"/>
+            </circle>
+            <circle cx="${cx}" cy="${cy}" r="3" fill="#e8e8e8"/>
+        </svg>`;
+        document.getElementById('sunDial').innerHTML = svg;
+    })();
+
+    const birdLabels = [{% for r in chart %}'{{ r[0] }}',{% endfor %}];
+    const birdValues = [{% for r in chart %}{{ r[1] }},{% endfor %}];
+    new Chart(document.getElementById('birdChart'), {
+        type: 'line',
+        data: {
+            labels: birdLabels,
+            datasets: [{ label: 'Species Count', data: birdValues, borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,0.1)', fill: true }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: { type: 'category', ticks: { autoSkip: false } },
+                y: { min: 0, ticks: { stepSize: 1 } }
+            }
+        }
+    });
+    document.getElementById("subscribe-form").addEventListener("submit", function(e) {
+        e.preventDefault();
+        const email = document.getElementById("subscribe-email").value;
+        fetch("/subscribe", { method: "POST", headers: {"Content-Type":"application/x-www-form-urlencoded"}, body: "email=" + encodeURIComponent(email) })
+            .then(r => { if (r.ok) { document.getElementById("subscribe-form").style.display = "none"; document.getElementById("subscribe-msg").style.display = "block"; } });
+    });
+</script>
+</body>
+</html>

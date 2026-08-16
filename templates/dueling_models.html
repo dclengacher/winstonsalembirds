@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dueling Models — Winston-Salem Bird Station</title>
+    <meta name="description" content="Nightly head-to-head comparison of two competing statistical models predicting bird vocal activity.">
+    <meta property="og:title" content="Dueling Models — Winston-Salem Bird Station">
+    <meta property="og:description" content="Tracking two competing Bayesian models over time to see which better explains bird activity.">
+    <meta property="og:image" content="https://winstonsalembirds.com/static/history/01_garden.jpg">
+    <meta property="og:url" content="https://winstonsalembirds.com/dueling-models">
+    <meta property="og:type" content="website">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f6f8; color: #333; }
+        .container { display: flex; flex-direction: column; gap: 25px; max-width: 900px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .nav-bar { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; max-width:640px; margin:0 auto; }
+        .nav-link { flex:1; min-width:140px; text-align:center; background:white; border:2px solid #1a1a1a; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); padding:14px 22px; color:#2c3e50; font-weight:bold; text-decoration:none; font-size:1rem; transition:0.15s; }
+        .nav-link:hover { box-shadow:0 4px 8px rgba(0,0,0,0.15); transform:translateY(-1px); }
+        .verdict-box { border-radius: 8px; padding: 16px 20px; margin-bottom: 16px; }
+        .verdict-tie { background: #f0f2f5; border-left: 4px solid #999; }
+        .verdict-lead { background: #e8f5e9; border-left: 4px solid #4a7c3f; }
+        .legend-row { display: flex; gap: 20px; font-size: 0.85rem; margin: 10px 0 4px; }
+        .legend-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+        canvas { max-height: 320px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="text-align:center;">
+        <h1 style="margin:0;color:#2c3e50;">Dueling Models</h1>
+        <p style="margin:5px 0 0;color:#666;font-size:1rem;">Two competing statistical models, retrained nightly, racing to see which one better predicts bird activity.</p>
+    </div>
+    <div class="nav-bar">
+        <a href="/" class="nav-link">Dashboard</a>
+        <a href="/bird-models" class="nav-link">Bird Models</a>
+        <a href="/analytics" class="nav-link">Behind the Numbers</a>
+    </div>
+    <div class="card">
+        {% if duel_data.verdict %}
+        <div class="verdict-box {{ 'verdict-tie' if duel_data.verdict.leader is none else 'verdict-lead' }}">
+            <strong style="font-size:1.1rem;">{{ duel_data.verdict.label }}</strong>
+            <p style="margin:6px 0 0;color:#555;">{{ duel_data.verdict.detail }}</p>
+        </div>
+        {% endif %}
+        <h2 style="margin-top:0;">How well does each model fit the data?</h2>
+        <p style="color:#555;">This tracks each model's <strong>out-of-sample fit score</strong> every night — think of it like a nightly report card. Higher is better. It's measured on unseen data (via leave-one-out cross-validation), so a model can't just "memorize" the data to win — it has to genuinely explain patterns that generalize.</p>
+        <div class="legend-row">
+            <span><span class="legend-swatch" style="background:#1a4a6e;"></span>Bayesian (quadratic curve)</span>
+            <span><span class="legend-swatch" style="background:#c0392b;"></span>Categorical (hour-by-hour)</span>
+        </div>
+        <canvas id="duelChart"></canvas>
+        <p style="margin-top:14px;color:#777;font-size:0.85rem;">Shaded bands show statistical uncertainty. When the bands overlap, the two models are statistically indistinguishable that night — the higher line isn't necessarily "truly" better, just noisier.</p>
+    </div>
+    <div class="card">
+        <h2 style="margin-top:0;">Why two models at all?</h2>
+        <p style="color:#555;">The <strong>Bayesian model</strong> assumes each species' activity rises and falls smoothly across the day, like a single dawn peak that fades out. The <strong>categorical model</strong> makes no such assumption — it lets each hour be estimated independently, so it could in theory catch something the smooth model can't, like a species with both a dawn <em>and</em> a dusk peak. The trade-off: the categorical model has roughly double the moving parts, which raises real risk of just fitting noise rather than a genuine pattern. Racing them nightly is how we find out, honestly, whether that flexibility is actually paying off — or if the simpler model keeps winning.</p>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const bayesData = {{ duel_data.bayes | tojson }};
+    const catData = {{ duel_data.categorical | tojson }};
+
+    function toPoints(arr) {
+        return arr.map(d => ({ x: d.timestamp, y: d.elpd_per_row, se: d.se_per_row }));
+    }
+    const bayesPoints = toPoints(bayesData);
+    const catPoints = toPoints(catData);
+
+    const ctx = document.getElementById('duelChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: bayesPoints.map(p => p.x),
+            datasets: [
+                {
+                    label: 'Bayesian (quadratic)',
+                    data: bayesPoints.map(p => p.y),
+                    borderColor: '#1a4a6e',
+                    backgroundColor: 'rgba(26,74,110,0.08)',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    tension: 0.15
+                },
+                {
+                    label: 'Categorical (hour-by-hour)',
+                    data: catPoints.map(p => p.y),
+                    borderColor: '#c0392b',
+                    backgroundColor: 'rgba(192,57,43,0.08)',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    tension: 0.15
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { title: { display: true, text: 'Fit score per row (higher = better)' } },
+                x: { ticks: { maxRotation: 45, minRotation: 45 } }
+            }
+        }
+    });
+</script>
+</body>
+</html>

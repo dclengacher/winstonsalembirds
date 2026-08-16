@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Project History - Winston-Salem Bird Station</title>
+    <meta name="description" content="How the Winston-Salem Bird Station was built: the Raspberry Pi hardware, BirdNET-Pi setup, and the story behind this acoustic bird monitoring project.">
+    <meta property="og:title" content="Project History — Winston-Salem Bird Station">
+    <meta property="og:description" content="The story behind a backyard bird-listening project in Winston-Salem, NC — built for local birdwatching and getting to know the birds nearby in the Triad.">
+    <meta property="og:image" content="https://winstonsalembirds.com/static/history/01_garden.jpg">
+    <meta property="og:url" content="https://winstonsalembirds.com/history">
+    <meta property="og:type" content="website">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Project History — Winston-Salem Bird Station",
+      "url": "https://winstonsalembirds.com/history",
+      "description": "How the Winston-Salem Bird Station was built: the Raspberry Pi hardware, BirdNET-Pi setup, and the story behind this acoustic bird monitoring project."
+    }
+    </script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f6f8; color: #333; }
+        .container { display: flex; flex-direction: column; gap: 25px; max-width: 900px; margin: 0 auto; }
+        .back-link { display: inline-block; margin-bottom: 10px; color: #0066cc; font-weight: bold; text-decoration: none; }
+        h1 { color: #2c3e50; text-align: center; margin-bottom: 0; }
+        .subtitle { text-align: center; color: #666; margin-top: 5px; margin-bottom: 30px; }
+        .story-block { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden; }
+        .story-block img { width: 100%; height: auto; display: block; }
+        .story-text { padding: 20px 25px; }
+        .story-text h2 { color: #2c3e50; margin-top: 0; }
+        .story-text p { line-height: 1.6; margin-bottom: 0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="text-align:center;margin-bottom:15px;">
+        <a href="/" class="back-link">&larr; Back to Dashboard</a>
+    </div>
+
+    <h1>Project History</h1>
+    <p class="subtitle">From garden sensors to bird songs</p>
+
+    <div class="story-block">
+        <img src="/static/history/01_garden.jpg" alt="Original garden monitoring setup" onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.src.split('?')[0]+'?retry='+Date.now();},500);}">
+        <div class="story-text">
+            <h2>Where it started: garden monitoring</h2>
+            <p>Long before there was a bird station, there was a flower box. This Raspberry Pi setup started as a garden monitor &mdash; a Qwiic soil moisture sensor, a BME280 for temperature and humidity (connected via a Qwiic Shim), an ADS1115 analog-to-digital converter, and a DS3231 real-time clock (honestly overkill for this project), all feeding a Grafana dashboard so I could keep an eye on my plants without walking outside. The whole thing ran off a Jackery 300 portable power station.</p>
+        </div>
+    </div>
+
+    <div class="story-block">
+        <img src="/static/history/02_camera.jpg" alt="Raspberry Pi camera module" onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.src.split('?')[0]+'?retry='+Date.now();},500);}">
+        <div class="story-text">
+            <h2>The camera module</h2>
+            <p>That garden project taught the basics: I2C wiring, sensor addressing, and how much can go wrong with something as "simple" as an outdoor camera cable. When it was time to expand into acoustic bird detection with BirdNET-Pi, the same camera module became the eyes of the new station &mdash; small, cheap, and surprisingly capable once exposure and focus are dialed in.</p>
+        </div>
+    </div>
+
+    <div class="story-block">
+        <img src="/static/history/04_enclosure_a.jpg" alt="Bird station enclosure, first angle" onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.src.split('?')[0]+'?retry='+Date.now();},500);}">
+        <div class="story-text">
+            <h2>Building the enclosure</h2>
+            <p>From there it's been a process of small refinements &mdash; better cable routing and sturdier mounting &mdash; but I'll be honest: it's still fragile and not weatherproof. I bring it in overnight if there's any chance of rain. The next planned upgrade is an Ecowitt WittBoy Weather Station (GW2001) for proper outdoor-rated environmental monitoring, which should let the whole setup live outside full-time.</p>
+        </div>
+    </div>
+
+    <div class="story-block">
+        <img src="/static/history/05_enclosure_b.jpg" alt="Bird station enclosure, second angle" onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.src.split('?')[0]+'?retry='+Date.now();},500);}">
+        <div class="story-text">
+            <h2>Where it stands today</h2>
+            <p>What started as a way to keep tabs on a flower box has grown into a full acoustic monitoring station &mdash; tracking species activity, weather, and a live camera feed, all running quietly in the background year-round.</p>
+        </div>
+    </div>
+
+    <div class="story-block">
+        <img src="/static/history/06_wittboy.jpg" alt="Ecowitt WittBoy 7-in-1 weather sensor" onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.src.split('?')[0]+'?retry='+Date.now();},500);}">
+        <div class="story-text">
+            <h2>Upgrading the weather sensors</h2>
+            <p>The planned WittBoy upgrade arrived &mdash; every environmental sensor except the mic and camera was swapped for this single outdoor-rated 7-in-1 unit, adding wind, rain, solar radiation, and UV to what the BME280 could ever measure.</p>
+        </div>
+    </div>
+
+    <div class="story-block">
+        <img src="/static/history/06b_wittboy_installed.jpg" alt="WittBoy weather station installed in the yard" onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.src.split('?')[0]+'?retry='+Date.now();},500);}">
+        <div class="story-text">
+            <h2>The WittBoy, mounted</h2>
+            <p>Getting it up on a pole wasn't quite plug-and-play &mdash; I had to track down a 1-inch diameter dowel rod just to mount it properly in the yard.</p>
+        </div>
+    </div>
+
+    <div class="story-block">
+        <img src="/static/history/10_marketing_poster.jpg" alt="DIY marketing poster for the bird station" onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.src.split('?')[0]+'?retry='+Date.now();},500);}">
+        <div class="story-text">
+            <h2>Old-fashioned marketing</h2>
+            <p>QR codes aren't just for restaurant menus &mdash; I printed a few posters at UPS and put them up on community boards near Old Salem, hoping a few passersby would scan their way into a good bird rabbit hole.</p>
+        </div>
+    </div>
+
+    <div class="story-block">
+        <img src="/static/history/07_usb_mic_window.jpg" alt="USB mic wedged in kitchen window" onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.src.split('?')[0]+'?retry='+Date.now();},500);}">
+        <div class="story-text">
+            <h2>Chasing better audio: the USB mic</h2>
+            <p>To get the mic closer to the birds, I ran a USB extension cable out through the kitchen window, wedged between the screen and the glass. It works, but it's exposed to the weather every time it rains &mdash; not exactly a permanent solution.</p>
+        </div>
+    </div>
+
+    <div class="story-block">
+        <img src="/static/history/08_wireless_mic_build.jpg" alt="XIAO ESP32-C3 and INMP441 microphone breadboard build" onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.src.split('?')[0]+'?retry='+Date.now();},500);}">
+        <div class="story-text">
+            <h2>Going wireless: XIAO ESP32-C3 + INMP441</h2>
+            <p>Looking to ditch the window cable, I built a wireless mic using a Seeed XIAO ESP32-C3 (not the C6) paired with an INMP441 omnidirectional microphone.</p>
+        </div>
+    </div>
+
+    <div class="story-block">
+        <img src="/static/history/09_inmp441_closeup.jpg" alt="Close-up of INMP441 microphone wiring" onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.src.split('?')[0]+'?retry='+Date.now();},500);}">
+        <div class="story-text">
+            <h2>The overheating setback</h2>
+            <p>It worked great for about two hours, then started overheating and auto-shutting down at 80&deg;C. After five hours of troubleshooting and three more shutdowns, I reverted to the USB mic. I've since ordered the ESP32-C6 (the C3's bigger sibling) and still think a wireless solution is possible.</p>
+        </div>
+    </div>
+
+    <div class="story-block">
+        <div class="story-text">
+            <h2>A peek at the code</h2>
+            <p>People often ask how the live camera feed works. Here's a sanitized excerpt of the capture loop &mdash; it rotates through a few camera positions, writes each shot to a temp file, then atomically swaps it into place so the site never serves a half-written image.</p>
+            <pre style="background:#2c3e50;color:#e8e8e8;padding:18px;border-radius:6px;overflow-x:auto;font-size:0.85em;line-height:1.5;"><code>def run_camera_loop():
+    views = [
+        "",  # default wide view
+        "",  # default wide view
+        "--roi X,Y,W,H",   # centered zoom
+        "--roi X,Y,W,H",   # panned left
+        "--roi X,Y,W,H",   # panned right
+    ]
+    i = 0
+    while True:
+        roi = views[i % len(views)]
+        tmp_path = IMAGE_PATH + ".tmp"
+        cmd = f"rpicam-still -n --width 1280 --height 720 -q 95 {roi} -o " + tmp_path
+        result = subprocess.run(cmd, shell=True, capture_output=True,
+                                 text=True, timeout=25)
+        if result.returncode == 0 and os.path.getsize(tmp_path) > 0:
+            os.replace(tmp_path, IMAGE_PATH)  # atomic swap, no partial reads
+        i += 1
+        time.sleep(30)</code></pre>
+            <p style="margin-top:15px;">And the rolling 24-hour activity query behind the species chart:</p>
+            <pre style="background:#2c3e50;color:#e8e8e8;padding:18px;border-radius:6px;overflow-x:auto;font-size:0.85em;line-height:1.5;"><code>SELECT Date || ' ' || substr(Time,1,2) || ':' ||
+       printf('%02d', (CAST(substr(Time,4,2) AS INTEGER)/15)*15) AS block,
+       COUNT(DISTINCT Com_Name)
+FROM detections
+WHERE datetime(Date || ' ' || Time) >= datetime('now', 'localtime', '-24 hours')
+GROUP BY block
+ORDER BY block ASC;</code></pre>
+        </div>
+    </div>
+</div>
+</body>
+</html>

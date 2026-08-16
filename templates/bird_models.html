@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bird Models — Winston-Salem Bird Station</title>
+    <meta name="description" content="Predicted peak vocal activity hours for the top birds at the Winston-Salem Bird Station, from a Bayesian hierarchical model.">
+    <meta property="og:title" content="Bird Models — Winston-Salem Bird Station">
+    <meta property="og:description" content="Predicted peak vocal activity hours for top species, modeled from acoustic detection data.">
+    <meta property="og:image" content="https://winstonsalembirds.com/static/history/01_garden.jpg">
+    <meta property="og:url" content="https://winstonsalembirds.com/bird-models">
+    <meta property="og:type" content="website">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f6f8; color: #333; }
+        .container { display: flex; flex-direction: column; gap: 25px; max-width: 900px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow-x: auto; }
+        .nav-bar { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; max-width:640px; margin:0 auto; }
+        .nav-link { flex:1; min-width:140px; text-align:center; background:white; border:2px solid #1a1a1a; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); padding:14px 22px; color:#2c3e50; font-weight:bold; text-decoration:none; font-size:1rem; transition:0.15s; }
+        .nav-link:hover { box-shadow:0 4px 8px rgba(0,0,0,0.15); transform:translateY(-1px); }
+        .species-row { display: grid; grid-template-columns: 45px 78px minmax(140px,1fr) 100px; gap: 12px; align-items: center; padding: 10px 4px; border-top: 0.5px solid #ddd; }
+        .species-row:first-of-type { border-top: none; }
+        .bar-wrap { display: flex; align-items: flex-end; gap: 1px; height: 32px; }
+        .bar { flex: 1; background: #1a4a6e; border-radius: 1px 1px 0 0; }
+        .header-row { display: grid; grid-template-columns: 45px 78px minmax(140px,1fr) 100px; gap: 12px; padding: 6px 4px; font-size: 0.75rem; color: #888; }
+        .bird-thumb-sm { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; transform: scale(1.3); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="text-align:center;">
+        <h1 style="margin:0;color:#2c3e50;">Bird Models</h1>
+        <p style="margin:5px 0 0;color:#666;font-size:1.05rem;">Model-estimated vocal activity by hour — not raw detection counts. Each curve adjusts for temperature, humidity, pressure, and rainfall, isolating the effect of time of day alone.</p>
+    </div>
+    <div class="nav-bar">
+        <a href="/" class="nav-link">Dashboard</a>
+        <a href="/alltime" class="nav-link">All-Time Species</a>
+        <a href="/analytics" class="nav-link">View Analytics</a>
+    </div>
+    <div class="card">
+        {% if clock_data %}
+        <h2 style="margin-top:0;">Peak activity hour by species</h2>
+        <div class="header-row">
+            <span></span><span>Species</span><span>Predicted activity by hour</span><span style="text-align:right;font-weight:bold;">Peak hour</span>
+        </div>
+        <div style="display:grid;grid-template-columns:45px 78px minmax(140px,1fr) 100px;gap:12px;padding:0 4px 4px;font-size:0.7rem;color:#aaa;"><span></span><span></span><div style="display:flex;justify-content:space-between;font-weight:bold;"><span>5am</span><span>8pm</span></div><span></span></div>
+        {% for s in clock_data.species %}
+        <div class="species-row">
+            <img class="bird-thumb-sm" id="bm-img-{{ loop.index }}" data-name="{{ s.name }}" alt="{{ s.name }}"
+                 src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><rect width='40' height='40' rx='6' fill='%23eee'/></svg>">
+            <span style="font-size:13px;font-weight:500;">{{ s.name }}</span>
+            <div class="bar-wrap" role="img" aria-label="{{ s.name }} predicted activity by hour, peaking around {{ s.peak_hour }}:00">
+                {% set max_v = s.curve|max %}
+                {% for v in s.curve %}
+                <div class="bar" style="height:{{ [((v/max_v)*100)|round, 4]|max }}%;"></div>
+                {% endfor %}
+            </div>
+            <span style="text-align:right;"><strong style="font-size:14px;color:#2c3e50;">{{ s.pct_in_peak }}%</strong><span style="color:#777;font-size:14px;"> @ {{ s.peak_hour }}:00</span><br><span style="color:#999;font-size:14px;">n={{ s.n_detections }}</span></span>
+        </div>
+        {% endfor %}
+        <p style="margin:16px 0 0;font-size:0.75rem;color:#999;">Based on model version {{ clock_data.current_version }}. Updates automatically when a new model is promoted.</p>
+        {% else %}
+        <p>No model data available yet.</p>
+        {% endif %}
+    </div>
+</div>
+<script>
+    document.querySelectorAll('.bird-thumb-sm').forEach(img => {
+        const name = img.getAttribute('data-name');
+        if (!name) return;
+        fetch(`https://en.wikipedia.org/w/api.php?action=query&redirects=1&titles=${encodeURIComponent(name)}&prop=pageimages&format=json&pithumbsize=100&origin=*`)
+            .then(r => r.json()).then(d => {
+                const p = d.query.pages; const id = Object.keys(p)[0];
+                if (id !== "-1" && p[id] && p[id].thumbnail) {
+                    img.src = p[id].thumbnail.source;
+                }
+            })
+            .catch(() => {});
+    });
+</script>
+</body>
+</html>

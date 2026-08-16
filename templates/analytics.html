@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Analytics — Winston-Salem Bird Station</title>
+    <meta name="description" content="Species activity charts and analytics from the Winston-Salem Bird Station, tracking acoustic bird detections over time.">
+    <meta property="og:title" content="Analytics — Winston-Salem Bird Station">
+    <meta property="og:description" content="Charts showing which birds are most active, and when, in a Winston-Salem, NC backyard — handy for local birdwatchers in the Triad.">
+    <meta property="og:image" content="https://winstonsalembirds.com/static/history/01_garden.jpg">
+    <meta property="og:url" content="https://winstonsalembirds.com/analytics">
+    <meta property="og:type" content="website">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Analytics — Winston-Salem Bird Station",
+      "url": "https://winstonsalembirds.com/analytics",
+      "description": "Species activity charts and analytics from the Winston-Salem Bird Station, tracking acoustic bird detections over time."
+    }
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #333; font-size: 1.15em; }
+        h2 { text-align: center; color: #333; font-size: 0.95em; margin-top: 0; }
+        .chart-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 1000px; margin: 20px auto; }
+        .chart-container { position: relative; height: 350px; width: 100%; }
+        nav { text-align: center; margin-bottom: 20px; }
+        nav a { margin: 0 10px; text-decoration: none; color: #2c7a2c; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+        th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f0f0f0; }
+        .promoted-yes { color: #2c7a2c; font-weight: bold; }
+        .promoted-no { color: #999; }
+        .model-desc { font-size: 0.85em; line-height: 1.6; color: #333; }
+        .formula-box { background: #f0f2f5; border-left: 3px solid #4a7c3f; padding: 14px 16px; margin: 14px 0; font-family: "Courier New", monospace; font-size: 1.3em; overflow-x: auto; }
+        .heatmap-note { font-size: 0.8em; color: #666; margin: 0 0 10px; }
+        .heatmap-table { border-collapse: collapse; font-size: 0.62em; width: 100%; }
+        .heatmap-table th, .heatmap-table td { padding: 0; text-align: center; height: 16px; }
+        .heatmap-table th { font-weight: 400; color: #777; }
+        .heatmap-species { text-align: left !important; white-space: nowrap; padding-right: 6px !important; font-size: 1.15em; color: #333; }
+        .heatmap-legend { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 0.75em; color: #666; }
+        .heatmap-legend .swatch { width: 14px; height: 10px; display: inline-block; }
+        @media (max-width: 600px) {
+            .model-desc { font-size: 0.78em; }
+            .formula-box { font-size: 0.6em; padding: 10px; }
+            body { padding: 10px; }
+            h1 { font-size: 1em; }
+            h2 { font-size: 0.85em; }
+            .chart-card { padding: 10px; margin: 10px auto; }
+            .chart-container { height: 260px; }
+            table { font-size: 0.72em; }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>Chart.defaults.devicePixelRatio = window.devicePixelRatio || 2;</script>
+</head>
+<body>
+    <nav>
+        <a href="/">Dashboard</a>
+        <a href="/alltime">All-Time</a>
+        <a href="/analytics">Analytics</a>
+    </nav>
+
+    {% if mlops %}
+    <h1>MLOps Model Results</h1>
+
+    <div class="chart-card">
+        <h2># of Predicted vs Actual Detections</h2>
+        <div class="chart-container"><canvas id="predActualChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+        <h2>Weather Effects on Detection Rate</h2>
+        <div class="chart-container"><canvas id="coefChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+        <h2>WittBoy Variable Correlation Heatmap</h2>
+        <div style="overflow-x:auto;">
+        <table style="border-collapse:collapse;font-size:0.75em;">
+            <tr><th></th>{% for l in corr.labels %}<th style="padding:4px;">{{ l }}</th>{% endfor %}</tr>
+            {% for row in corr.matrix %}
+            <tr>
+                <td style="padding:4px;font-weight:bold;">{{ corr.labels[loop.index0] }}</td>
+                {% for v in row %}
+                {% set color = 'rgba(46,125,50,' ~ (v if v > 0 else 0) ~ ')' if v > 0 else 'rgba(211,47,47,' ~ (-v) ~ ')' %}
+                <td style="padding:4px;text-align:center;background:{{ color }};min-width:50px;">{{ v }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </table>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h2>Model Version History</h2>
+        <table>
+            <tr><th>Version</th><th>Rows</th><th>{{ mlops.version_table[0].fit_metric_label if mlops.version_table else 'Fit metric' }}</th><th>Promoted</th></tr>
+            {% for v in mlops.version_table %}
+            <tr>
+                <td>{{ v.version_id }}</td>
+                <td>{{ v.n_rows }}</td>
+                <td>{{ v.fit_metric if v.fit_metric is not none else 'N/A' }}</td>
+                <td class="{{ 'promoted-yes' if v.promoted else 'promoted-no' }}">{{ 'Yes' if v.promoted else 'No' }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+
+    <h1>Top 10 Species — Activity by Time of Day (Last 30 Days)</h1>
+    <div class="chart-card">
+        <p class="heatmap-note">Each row is a species. Each column is a 30-minute window. Darker = higher share of active days in that window.</p>
+        <div style="overflow-x:auto;">
+        <table class="heatmap-table">
+            <tr><th></th>{% for b in buckets %}<th>{{ b if loop.index0 % 2 == 0 else '' }}</th>{% endfor %}</tr>
+            {% for d in datasets %}
+            {% set row_max = d['values'] | max %}
+            <tr>
+                <td class="heatmap-species">{{ d.label }}</td>
+                {% for v in d['values'] %}
+                {% set intensity = (v / row_max) if row_max > 0 else 0 %}
+                <td style="background: rgba(46,125,50,{{ (intensity ** 0.6) | round(2) }});" title="{{ d.label }}, {{ buckets[loop.index0] }} — {{ v }}% of this species' active-day windows"></td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </table>
+        </div>
+        <div class="heatmap-legend">
+            <span>Fewer active days</span>
+            <span class="swatch" style="background: rgba(46,125,50,0.1);"></span>
+            <span class="swatch" style="background: rgba(46,125,50,0.3);"></span>
+            <span class="swatch" style="background: rgba(46,125,50,0.6);"></span>
+            <span class="swatch" style="background: rgba(46,125,50,0.9);"></span>
+            <span>More active days</span>
+        </div>
+    </div>
+
+    {% if mlops %}
+    <script>
+        const predActualChartInstance = new Chart(document.getElementById('predActualChart'), {
+            type: 'line',
+            data: {
+                labels: [{% for l in mlops.pred_labels %}'{{ l }}',{% endfor %}],
+                datasets: [
+                    { label: 'Actual', data: [{% for v in mlops.pred_actual %}{{ v }},{% endfor %}], borderColor: '#3cb44b', fill: false, tension: 0.3 },
+                    { label: 'Predicted', data: [{% for v in mlops.pred_predicted %}{{ v }},{% endfor %}], borderColor: '#4363d8', fill: false, tension: 0.3, borderDash: [5,5] }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                scales: {
+                    y: { title: { display: true, text: 'Total Detections (all species)' }, beginAtZero: true },
+                    x: { ticks: { maxRotation: 90, minRotation: 45 } }
+                }
+            }
+        });
+
+        const coefProbs = [{% for p in mlops.coef_probs %}{{ p if p is not none else 'null' }},{% endfor %}];
+        const coefChartInstance = new Chart(document.getElementById('coefChart'), {
+            type: 'bar',
+            plugins: [{
+                id: 'probLabels',
+                afterDatasetsDraw(chart) {
+                    const {ctx} = chart;
+                    chart.getDatasetMeta(0).data.forEach((bar, i) => {
+                        const p = coefProbs[i];
+                        if (p === null) return;
+                        ctx.fillStyle = '#333';
+                        ctx.font = '11px sans-serif';
+                        ctx.fillText('P=' + p, bar.x + (bar.base < bar.x ? 6 : -30), bar.y + 4);
+                    });
+                }
+            }],
+            data: {
+                labels: [{% for l in mlops.coef_labels %}'{{ l }}',{% endfor %}],
+                datasets: [{
+                    label: 'Effect on log(detection rate)',
+                    data: [{% for v in mlops.coef_means %}{{ v }},{% endfor %}],
+                    datalabels: [{% for p in mlops.coef_probs %}{{ p if p is not none else 'null' }},{% endfor %}],
+                    backgroundColor: [{% for v in mlops.coef_means %}'{{ "#e6194b" if v < 0 else "#3cb44b" }}',{% endfor %}]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { title: { display: true, text: 'Coefficient (standardized)' } }
+                }
+            }
+        });
+
+        const _allCharts = [predActualChartInstance, coefChartInstance];
+        let _resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(_resizeTimer);
+            _resizeTimer = setTimeout(() => {
+                _allCharts.forEach(c => {
+                    c.options.devicePixelRatio = window.devicePixelRatio || 2;
+                    c.resize();
+                });
+            }, 150);
+        });
+    </script>
+
+    <div class="chart-card">
+        <h2>About This Model</h2>
+        <div class="model-desc">
+            This dashboard is powered by a Bayesian hierarchical Negative Binomial model, fit using PyMC via MCMC sampling (NUTS), on the top 20 most-detected species. The outcome is the number of detections for a given species within a given hourly window, including true zeros for hours when nothing was heard. A negative binomial likelihood was chosen over Poisson because detection counts are highly overdispersed — some species (like Carolina Wren and Gray Catbird) call in bursts, producing far more variance than a Poisson model can explain. Temperature, humidity, pressure, and rainfall enter as standardized fixed effects shared across all species. Time of day enters as a quadratic curve, letting each species peak at its own hour rather than sharing one shape — species is treated as a random intercept and random time-of-day slope on the log scale, letting each species have its own baseline calling rate and its own peak timing, with sparse species pulled toward the group average. The model is retrained daily as new detections accumulate, and a new version is only promoted to production if it has a better estimated out-of-sample fit (via LOO cross-validation) than the current one. The current formulation is shown below, where count is assumed to follow a Negative Binomial distribution with mean &mu; and dispersion &alpha;.
+            <div class="formula-box">
+                log(&mu;) = &beta;<sub>0</sub> + &beta;<sub>1</sub>&middot;Temp + &beta;<sub>2</sub>&middot;Humidity + &beta;<sub>3</sub>&middot;Pressure + &beta;<sub>4</sub>&middot;Rain + (&beta;<sub>5</sub>+b<sub>5,species</sub>)&middot;TimeOfDay + (&beta;<sub>6</sub>+b<sub>6,species</sub>)&middot;TimeOfDay&sup2; + u<sub>species</sub><br><br>
+                count &sim; NegBinomial(&mu;, &alpha;)<br>
+                u<sub>species</sub> &sim; Normal(&mu;<sub>species</sub>, &sigma;&sup2;<sub>species</sub>)<br>
+                b<sub>5,species</sub>, b<sub>6,species</sub> &sim; Normal(0, &sigma;&sup2;<sub>time</sub>)
+            </div>
+            <p style="margin:20px 0 8px;font-weight:bold;">What "hierarchical" actually means</p>
+            <p style="margin:0 0 10px;">Each species' baseline calling rate is pulled toward the group average — pulled hard when a species has little data, barely at all when it has a lot. This is what lets sparse species (like Common Grackle) get a stable, sensible estimate instead of an overfit one, while common species (like Gray Catbird) are trusted almost entirely on their own data.</p>
+            <svg width="100%" viewBox="0 0 680 430" style="max-width:680px;display:block;margin:0 auto;">
+            <defs><marker id="sarrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+            <line x1="390" y1="50" x2="390" y2="400" stroke="#888" stroke-width="1" stroke-dasharray="4 4"/>
+            <text x="390" y="40" text-anchor="middle" font-size="12" fill="#666">Group average calling rate</text>
+            <text x="40" y="70" font-size="14" font-weight="bold" fill="#333">Gray Catbird</text>
+            <text x="170" y="70" font-size="12" fill="#666">n = 6,552</text>
+            <line x1="480" y1="100" x2="470" y2="100" stroke="#888" stroke-width="1.5" marker-end="url(#sarrow)"/>
+            <circle cx="480" cy="100" r="16" fill="none" stroke="#888" stroke-width="1.5"/>
+            <circle cx="470" cy="100" r="16" fill="#c0dd97" stroke="#3b6d11" stroke-width="0.5"/>
+            <text x="500" y="105" font-size="12" fill="#666">Barely moves</text>
+            <text x="40" y="160" font-size="14" font-weight="bold" fill="#333">Fish Crow</text>
+            <text x="170" y="160" font-size="12" fill="#666">n = 1,806</text>
+            <line x1="520" y1="190" x2="495" y2="190" stroke="#888" stroke-width="1.5" marker-end="url(#sarrow)"/>
+            <circle cx="520" cy="190" r="13" fill="none" stroke="#888" stroke-width="1.5"/>
+            <circle cx="495" cy="190" r="13" fill="#c0dd97" stroke="#3b6d11" stroke-width="0.5"/>
+            <text x="540" y="195" font-size="12" fill="#666">Small pull</text>
+            <text x="40" y="250" font-size="14" font-weight="bold" fill="#333">Great Crested Flycatcher</text>
+            <text x="270" y="250" font-size="12" fill="#666">n = 76</text>
+            <line x1="250" y1="280" x2="310" y2="280" stroke="#888" stroke-width="1.5" marker-end="url(#sarrow)"/>
+            <circle cx="250" cy="280" r="9" fill="none" stroke="#888" stroke-width="1.5"/>
+            <circle cx="310" cy="280" r="9" fill="#c0dd97" stroke="#3b6d11" stroke-width="0.5"/>
+            <text x="330" y="285" font-size="12" fill="#666">Moderate pull</text>
+            <text x="40" y="340" font-size="14" font-weight="bold" fill="#333">Common Grackle</text>
+            <text x="205" y="340" font-size="12" fill="#666">n = 33</text>
+            <line x1="170" y1="370" x2="290" y2="370" stroke="#888" stroke-width="1.5" marker-end="url(#sarrow)"/>
+            <circle cx="170" cy="370" r="6" fill="none" stroke="#888" stroke-width="1.5"/>
+            <circle cx="290" cy="370" r="6" fill="#c0dd97" stroke="#3b6d11" stroke-width="0.5"/>
+            <text x="310" y="375" font-size="12" fill="#666">Pulled hardest</text>
+            <circle cx="60" cy="410" r="6" fill="none" stroke="#888" stroke-width="1.5"/>
+            <line x1="72" y1="410" x2="98" y2="410" stroke="#888" stroke-width="1.5" marker-end="url(#sarrow)"/>
+            <circle cx="106" cy="410" r="6" fill="#c0dd97" stroke="#3b6d11" stroke-width="0.5"/>
+            <text x="120" y="414" font-size="12" fill="#666">Raw estimate &#8594; model estimate</text>
+            </svg>
+            Coefficients and predictions shown above reflect the current production model version.
+    </div>
+    {% endif %}
+</body>
+</html>

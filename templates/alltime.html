@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>All-Time Bird List — Winston-Salem Bird Station</title>
+    <meta name="description" content="Complete list of all bird species detected at the Winston-Salem Bird Station acoustic monitoring site, powered by BirdNET-Pi.">
+    <meta property="og:title" content="All-Time Bird List — Winston-Salem Bird Station">
+    <meta property="og:description" content="Every bird species heard so far in a Winston-Salem, NC backyard — a running list for local birdwatchers in the Triad.">
+    <meta property="og:image" content="https://winstonsalembirds.com/static/history/01_garden.jpg">
+    <meta property="og:url" content="https://winstonsalembirds.com/alltime">
+    <meta property="og:type" content="website">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "All-Time Bird List — Winston-Salem Bird Station",
+      "url": "https://winstonsalembirds.com/alltime",
+      "description": "Complete list of all bird species detected at the Winston-Salem Bird Station acoustic monitoring site, powered by BirdNET-Pi."
+    }
+    </script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f6f8; color: #333; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f8f9fa; position: sticky; top: 0; }
+        .table-scroll { max-height: 700px; overflow-y: auto; }
+        a.back { display: inline-block; margin-bottom: 15px; color: #0066cc; text-decoration: none; }
+    </style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-2V6321XXM0"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag("js", new Date());
+  gtag("config", "G-2V6321XXM0");
+</script>
+</head>
+<body>
+<div class="container">
+    <a class="back" href="/">← Back to Live Dashboard</a> &nbsp;&nbsp; <a href="/analytics" style="color:#0066cc;font-weight:bold;text-decoration:none;">📊 View Analytics →</a>
+    <h1>All-Time Species Detected</h1>
+    <div class="table-scroll">
+    <table>
+        <thead>
+            <tr><th>#</th><th>Common Name</th><th>Scientific Name</th><th>Last Heard</th><th>Total Detections</th></tr>
+        </thead>
+        <tbody>
+            {% for bird in birds %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td><strong>{{ bird[0] }}</strong></td>
+                <td><small>{{ bird[1] }}</small></td>
+                <td>{{ bird[2] }}</td>
+                <td>{{ bird[3] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+</body>
+</html>

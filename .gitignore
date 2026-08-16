@@ -1,0 +1,15 @@
+mlops_venv/
+mlops/models/
+mlops/experiments/
+mlops/logs/
+mlops/scripts/__pycache__/
+mlops/scripts/extracted_data.csv
+mlops/scripts/*.bak
+logs/
+static/live.jpg
+static/history/originals/
+app/.env
+*.pyc
+__pycache__/
+*.db
+*.bak*
