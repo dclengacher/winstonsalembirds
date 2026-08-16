@@ -61,8 +61,17 @@
     const bayesData = {{ duel_data.bayes | tojson }};
     const catData = {{ duel_data.categorical | tojson }};
 
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    function formatTimestamp(ts) {
+        // Handles both the Bayesian model's "YYYYMMDD_HHMMSS" and the
+        // categorical model's date-only "YYYYMMDD" -- only the first 8
+        // digits (the date) are ever shown on the axis.
+        const m = String(ts).match(/^(\d{4})(\d{2})(\d{2})/);
+        if (!m) return ts;
+        return `${MONTHS[parseInt(m[2], 10) - 1]} ${parseInt(m[3], 10)}`;
+    }
     function toPoints(arr) {
-        return arr.map(d => ({ x: d.timestamp, y: d.elpd_per_row, se: d.se_per_row }));
+        return arr.map(d => ({ x: formatTimestamp(d.timestamp), y: d.elpd_per_row, se: d.se_per_row }));
     }
     const bayesPoints = toPoints(bayesData);
     const catPoints = toPoints(catData);
@@ -155,7 +164,7 @@
                 tooltip: { filter: (item) => !item.dataset.isBand }
             },
             scales: {
-                y: { title: { display: true, text: 'ELPD per row (log-predictive density; higher = better)' } },
+                y: { title: { display: true, text: 'ELPD per row (higher = better)' } },
                 x: { ticks: { maxRotation: 45, minRotation: 45 } }
             }
         }
