@@ -282,11 +282,15 @@ def load_mlops_data():
         "tempf": "Temp",
         "humidity": "Humidity",
         "baromrelin": "Pressure",
+        "dailyrain": "Rain",
         "time_of_day": "Time of Day",
+        "time_of_day2": "Time of Day (curve)",
         "beta_tempf": "Temp",
         "beta_humidity": "Humidity",
         "beta_baromrelin": "Pressure",
+        "beta_dailyrain": "Rain",
         "beta_time_of_day": "Time of Day",
+        "beta_time_of_day2": "Time of Day (curve)",
     }
     coef_keys = [k for k in coefficients if k not in ("Intercept", "intercept")]
     coef_labels = [FRIENDLY_NAMES.get(k, k) for k in coef_keys]

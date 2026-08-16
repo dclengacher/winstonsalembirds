@@ -131,13 +131,21 @@
             plugins: [{
                 id: 'probLabels',
                 afterDatasetsDraw(chart) {
-                    const {ctx} = chart;
+                    const {ctx, chartArea} = chart;
+                    ctx.font = '11px sans-serif';
                     chart.getDatasetMeta(0).data.forEach((bar, i) => {
                         const p = coefProbs[i];
                         if (p === null) return;
+                        const label = 'P=' + p;
+                        const textWidth = ctx.measureText(label).width;
+                        // Model coefficients shift with every daily retrain, so a bar's
+                        // tip can land anywhere near either axis edge -- clamp the label
+                        // into the chart area instead of assuming a fixed offset direction.
+                        let x = bar.x + (bar.base < bar.x ? 6 : -textWidth - 6);
+                        x = Math.min(x, chartArea.right - textWidth - 2);
+                        x = Math.max(x, chartArea.left + 2);
                         ctx.fillStyle = '#333';
-                        ctx.font = '11px sans-serif';
-                        ctx.fillText('P=' + p, bar.x + (bar.base < bar.x ? 6 : -30), bar.y + 4);
+                        ctx.fillText(label, x, bar.y + 4);
                     });
                 }
             }],

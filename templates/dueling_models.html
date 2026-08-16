@@ -43,13 +43,13 @@
         </div>
         {% endif %}
         <h2 style="margin-top:0;">How well does each model fit the data?</h2>
-        <p style="color:#555;">This tracks each model's <strong>out-of-sample fit score</strong> every night — think of it like a nightly report card. Higher is better. It's measured on unseen data (via leave-one-out cross-validation), so a model can't just "memorize" the data to win — it has to genuinely explain patterns that generalize.</p>
+        <p style="color:#555;">This tracks each model's <strong>expected log pointwise predictive density (ELPD)</strong> every night, divided by row count so nights with different amounts of data are comparable — a leave-one-out cross-validated, log-likelihood-scale score of how well each model predicts data it wasn't fit on. Think of it like a nightly report card: a model can't just "memorize" the data to win, it has to genuinely explain patterns that generalize. Because it's a log-scale score, the values are negative, and <strong>higher (closer to zero) is better</strong> — e.g. -0.594 is a better fit than -0.614.</p>
         <div class="legend-row">
             <span><span class="legend-swatch" style="background:#1a4a6e;"></span>Bayesian (quadratic curve)</span>
             <span><span class="legend-swatch" style="background:#c0392b;"></span>Categorical (hour-by-hour)</span>
         </div>
         <canvas id="duelChart"></canvas>
-        <p style="margin-top:14px;color:#777;font-size:0.85rem;">Shaded bands show statistical uncertainty. When the bands overlap, the two models are statistically indistinguishable that night — the higher line isn't necessarily "truly" better, just noisier.</p>
+        <p style="margin-top:14px;color:#777;font-size:0.85rem;">Shaded bands show statistical uncertainty (± 1 standard error). When the bands overlap, the two models are statistically indistinguishable that night — the higher line isn't necessarily "truly" better, just noisier.</p>
     </div>
     <div class="card">
         <h2 style="margin-top:0;">Why two models at all?</h2>
@@ -67,12 +67,54 @@
     const bayesPoints = toPoints(bayesData);
     const catPoints = toPoints(catData);
 
+    // Band pairs (upper/lower) must sit at ADJACENT array indices for Chart.js's
+    // fill: '-1' to reference the right dataset -- it fills relative to array
+    // position, not visual order. Both real line datasets go last so they draw
+    // on top of both fills.
     const ctx = document.getElementById('duelChart').getContext('2d');
     new Chart(ctx, {
         type: 'line',
         data: {
             labels: bayesPoints.map(p => p.x),
             datasets: [
+                {
+                    label: 'Bayesian ± SE (upper)',
+                    data: bayesPoints.map(p => p.y + p.se),
+                    borderWidth: 0,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.15,
+                    isBand: true
+                },
+                {
+                    label: 'Bayesian ± SE',
+                    data: bayesPoints.map(p => p.y - p.se),
+                    borderWidth: 0,
+                    pointRadius: 0,
+                    backgroundColor: 'rgba(26,74,110,0.15)',
+                    fill: '-1',
+                    tension: 0.15,
+                    isBand: true
+                },
+                {
+                    label: 'Categorical ± SE (upper)',
+                    data: catPoints.map(p => p.y + p.se),
+                    borderWidth: 0,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.15,
+                    isBand: true
+                },
+                {
+                    label: 'Categorical ± SE',
+                    data: catPoints.map(p => p.y - p.se),
+                    borderWidth: 0,
+                    pointRadius: 0,
+                    backgroundColor: 'rgba(192,57,43,0.15)',
+                    fill: '-1',
+                    tension: 0.15,
+                    isBand: true
+                },
                 {
                     label: 'Bayesian (quadratic)',
                     data: bayesPoints.map(p => p.y),
@@ -93,11 +135,27 @@
                 }
             ]
         },
+        plugins: [{
+            id: 'betterFitLabel',
+            afterDraw(chart) {
+                const {ctx, chartArea, scales} = chart;
+                ctx.save();
+                ctx.fillStyle = '#4a7c3f';
+                ctx.font = 'bold 11px sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillText('↑ Better fit', chartArea.left + 4, chartArea.top + 12);
+                ctx.restore();
+            }
+        }],
         options: {
             responsive: true,
-            plugins: { legend: { display: false } },
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: { filter: (item) => !item.dataset.isBand }
+            },
             scales: {
-                y: { title: { display: true, text: 'Fit score per row (higher = better)' } },
+                y: { title: { display: true, text: 'ELPD per row (log-predictive density; higher = better)' } },
                 x: { ticks: { maxRotation: 45, minRotation: 45 } }
             }
         }
