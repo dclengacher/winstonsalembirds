@@ -278,26 +278,35 @@ def load_mlops_data():
     hod_actual = [round(sum(hod_acc[h]["actual"]) / len(hod_acc[h]["actual"]), 1) if hod_acc[h]["actual"] else 0 for h in HOD_HOURS]
     hod_predicted = [round(sum(hod_acc[h]["predicted"]) / len(hod_acc[h]["predicted"]), 1) if hod_acc[h]["predicted"] else 0 for h in HOD_HOURS]
 
-    # Fit-quality scatter: one point per hour-bin, restricted to the most recent
-    # 30 days present in the file (predictions.csv is a point-in-time snapshot,
-    # so "recent" is relative to the data itself, not to today's real date).
+    # Calibration view: one raw hour-bin (one specific hour on one specific date,
+    # summed across species) is a noisy single draw from an admittedly
+    # overdispersed distribution -- comparing it 1:1 against a point prediction
+    # will always look scattered, regardless of model quality. Instead, restrict
+    # to the most recent 30 days, sort hour-bins into ~10 bins by predicted
+    # value, and compare mean actual vs. mean predicted per bin. Averaging within
+    # a band cancels out the per-hour noise and reveals whether the model's mean
+    # function is actually calibrated (points should hug the diagonal if so).
     all_dates = [dt for dt, _ in hourly_parsed.values()]
     cutoff = (max(all_dates) - _timedelta(days=30)) if all_dates else None
-    scatter_points = [
-        {"x": round(v["actual"], 1), "y": round(v["predicted"], 1)}
+    recent_points = [
+        {"actual": v["actual"], "predicted": v["predicted"]}
         for dt, v in hourly_parsed.values() if cutoff is None or dt >= cutoff
     ]
-    # Cap the axis near the 90th percentile rather than the true max, so a
-    # handful of extreme burst hours don't stretch the scale and squish
-    # every well-fit low-count point into the corner. Points beyond the cap
-    # still exist in scatter_points; they just render off-chart.
-    _combined = sorted([p["x"] for p in scatter_points] + [p["y"] for p in scatter_points])
-    if _combined:
-        _idx = int(0.90 * (len(_combined) - 1))
-        scatter_max = round(max(_combined[_idx] * 1.15, 1), 1)
-    else:
-        scatter_max = 1
-    scatter_clipped_count = sum(1 for p in scatter_points if p["x"] > scatter_max or p["y"] > scatter_max)
+    recent_points.sort(key=lambda p: p["predicted"])
+    n_bins = 10
+    calib_bins = []
+    if recent_points:
+        bin_size = max(1, -(-len(recent_points) // n_bins))  # ceil division
+        for i in range(0, len(recent_points), bin_size):
+            chunk = recent_points[i:i + bin_size]
+            if not chunk:
+                continue
+            calib_bins.append({
+                "x": round(sum(p["predicted"] for p in chunk) / len(chunk), 1),
+                "y": round(sum(p["actual"] for p in chunk) / len(chunk), 1),
+                "n": len(chunk),
+            })
+    calib_max = round(max([b["x"] for b in calib_bins] + [b["y"] for b in calib_bins] + [1]) * 1.15, 1)
 
     FRIENDLY_NAMES = {
         "tempf": "Temp",
@@ -341,9 +350,8 @@ def load_mlops_data():
         "hod_labels": hod_labels,
         "hod_actual": hod_actual,
         "hod_predicted": hod_predicted,
-        "scatter_points": scatter_points,
-        "scatter_max": scatter_max,
-        "scatter_clipped_count": scatter_clipped_count,
+        "calib_bins": calib_bins,
+        "calib_max": calib_max,
         "coef_labels": coef_labels,
         "coef_means": coef_means,
         "coef_sds": coef_sds,

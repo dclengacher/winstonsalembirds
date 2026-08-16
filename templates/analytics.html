@@ -65,8 +65,8 @@
     </div>
 
     <div class="chart-card">
-        <h2>Predicted vs Actual — Model Fit (Last 30 Days)</h2>
-        <p class="chart-note">Each dot is one hour-bin from the most recent 30 days in the training data. Dots on the dashed line mean the prediction matched exactly. Axis capped near the 90th percentile for readability{{ " — " ~ mlops.scatter_clipped_count ~ " extreme point" ~ ("s" if mlops.scatter_clipped_count != 1 else "") ~ " render off-chart" if mlops.scatter_clipped_count else "" }}.</p>
+        <h2>Model Calibration (Last 30 Days)</h2>
+        <p class="chart-note">Recent hour-bins sorted into 10 bins by predicted value; each point is the average actual vs. average predicted within a bin (bin size shown on hover). A single raw hour-bin is too noisy to judge fit by eye on overdispersed count data — averaging within a band reveals whether the model's trend is actually calibrated. Points on the dashed line mean the model got that band right on average.</p>
         <div class="chart-container"><canvas id="fitScatterChart"></canvas></div>
     </div>
 
@@ -131,21 +131,25 @@
             }
         });
 
-        const scatterMax = {{ mlops.scatter_max }};
-        const fitScatterChartInstance = new Chart(document.getElementById('fitScatterChart'), {
+        const calibMax = {{ mlops.calib_max }};
+        const calibN = [{% for b in mlops.calib_bins %}{{ b.n }},{% endfor %}];
+        const fitCalibChartInstance = new Chart(document.getElementById('fitScatterChart'), {
             type: 'scatter',
             data: {
                 datasets: [
                     {
-                        label: 'Hour-bin (actual, predicted)',
-                        data: [{% for p in mlops.scatter_points %}{x: {{ p.x }}, y: {{ p.y }}},{% endfor %}],
-                        backgroundColor: 'rgba(67,99,216,0.55)',
-                        pointRadius: 4
+                        label: 'Bin: avg. predicted vs. avg. actual',
+                        data: [{% for b in mlops.calib_bins %}{x: {{ b.x }}, y: {{ b.y }}},{% endfor %}],
+                        backgroundColor: 'rgba(67,99,216,0.85)',
+                        borderColor: '#4363d8',
+                        showLine: true,
+                        pointRadius: 6,
+                        pointHoverRadius: 8
                     },
                     {
-                        label: 'Perfect fit (y = x)',
+                        label: 'Perfect calibration (y = x)',
                         type: 'line',
-                        data: [{x: 0, y: 0}, {x: scatterMax, y: scatterMax}],
+                        data: [{x: 0, y: 0}, {x: calibMax, y: calibMax}],
                         borderColor: '#999',
                         borderDash: [5,5],
                         borderWidth: 1,
@@ -157,10 +161,21 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom' } },
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                if (ctx.datasetIndex !== 0) return ctx.dataset.label;
+                                const n = calibN[ctx.dataIndex];
+                                return `Avg predicted ${ctx.parsed.x}, avg actual ${ctx.parsed.y} (n=${n} hour-bins)`;
+                            }
+                        }
+                    }
+                },
                 scales: {
-                    x: { title: { display: true, text: 'Actual Detections' }, beginAtZero: true, max: scatterMax },
-                    y: { title: { display: true, text: 'Predicted Detections' }, beginAtZero: true, max: scatterMax }
+                    x: { title: { display: true, text: 'Avg. Predicted Detections (per bin)' }, beginAtZero: true, max: calibMax },
+                    y: { title: { display: true, text: 'Avg. Actual Detections (per bin)' }, beginAtZero: true, max: calibMax }
                 }
             }
         });
@@ -201,7 +216,7 @@
             }
         });
 
-        const _allCharts = [hodChartInstance, fitScatterChartInstance, coefChartInstance];
+        const _allCharts = [hodChartInstance, fitCalibChartInstance, coefChartInstance];
         let _resizeTimer;
         window.addEventListener('resize', () => {
             clearTimeout(_resizeTimer);
