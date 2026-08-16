@@ -258,7 +258,7 @@ def load_mlops_data():
             hourly[hb]["actual"] += float(row["count"])
             hourly[hb]["predicted"] += float(row["predicted"])
 
-    from datetime import datetime as _dt2, timedelta as _timedelta
+    from datetime import datetime as _dt2
     def _parse_hb(h):
         try:
             return _dt2.strptime(h, "%Y-%m-%d %H:%M:%S")
@@ -277,36 +277,6 @@ def load_mlops_data():
     hod_labels = [f"{h:02d}:00" for h in HOD_HOURS]
     hod_actual = [round(sum(hod_acc[h]["actual"]) / len(hod_acc[h]["actual"]), 1) if hod_acc[h]["actual"] else 0 for h in HOD_HOURS]
     hod_predicted = [round(sum(hod_acc[h]["predicted"]) / len(hod_acc[h]["predicted"]), 1) if hod_acc[h]["predicted"] else 0 for h in HOD_HOURS]
-
-    # Calibration view: one raw hour-bin (one specific hour on one specific date,
-    # summed across species) is a noisy single draw from an admittedly
-    # overdispersed distribution -- comparing it 1:1 against a point prediction
-    # will always look scattered, regardless of model quality. Instead, restrict
-    # to the most recent 30 days, sort hour-bins into ~10 bins by predicted
-    # value, and compare mean actual vs. mean predicted per bin. Averaging within
-    # a band cancels out the per-hour noise and reveals whether the model's mean
-    # function is actually calibrated (points should hug the diagonal if so).
-    all_dates = [dt for dt, _ in hourly_parsed.values()]
-    cutoff = (max(all_dates) - _timedelta(days=30)) if all_dates else None
-    recent_points = [
-        {"actual": v["actual"], "predicted": v["predicted"]}
-        for dt, v in hourly_parsed.values() if cutoff is None or dt >= cutoff
-    ]
-    recent_points.sort(key=lambda p: p["predicted"])
-    n_bins = 10
-    calib_bins = []
-    if recent_points:
-        bin_size = max(1, -(-len(recent_points) // n_bins))  # ceil division
-        for i in range(0, len(recent_points), bin_size):
-            chunk = recent_points[i:i + bin_size]
-            if not chunk:
-                continue
-            calib_bins.append({
-                "x": round(sum(p["predicted"] for p in chunk) / len(chunk), 1),
-                "y": round(sum(p["actual"] for p in chunk) / len(chunk), 1),
-                "n": len(chunk),
-            })
-    calib_max = round(max([b["x"] for b in calib_bins] + [b["y"] for b in calib_bins] + [1]) * 1.15, 1)
 
     FRIENDLY_NAMES = {
         "tempf": "Temp",
@@ -350,8 +320,6 @@ def load_mlops_data():
         "hod_labels": hod_labels,
         "hod_actual": hod_actual,
         "hod_predicted": hod_predicted,
-        "calib_bins": calib_bins,
-        "calib_max": calib_max,
         "coef_labels": coef_labels,
         "coef_means": coef_means,
         "coef_sds": coef_sds,

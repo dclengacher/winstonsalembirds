@@ -65,12 +65,6 @@
     </div>
 
     <div class="chart-card">
-        <h2>Model Calibration (Last 30 Days)</h2>
-        <p class="chart-note">Recent hour-bins sorted into 10 bins by predicted value; each point is the average actual vs. average predicted within a bin (bin size shown on hover). A single raw hour-bin is too noisy to judge fit by eye on overdispersed count data — averaging within a band reveals whether the model's trend is actually calibrated. Points on the dashed line mean the model got that band right on average.</p>
-        <div class="chart-container"><canvas id="fitScatterChart"></canvas></div>
-    </div>
-
-    <div class="chart-card">
         <h2>Weather Effects on Detection Rate</h2>
         <div class="chart-container"><canvas id="coefChart"></canvas></div>
     </div>
@@ -131,55 +125,6 @@
             }
         });
 
-        const calibMax = {{ mlops.calib_max }};
-        const calibN = [{% for b in mlops.calib_bins %}{{ b.n }},{% endfor %}];
-        const fitCalibChartInstance = new Chart(document.getElementById('fitScatterChart'), {
-            type: 'scatter',
-            data: {
-                datasets: [
-                    {
-                        label: 'Bin: avg. predicted vs. avg. actual',
-                        data: [{% for b in mlops.calib_bins %}{x: {{ b.x }}, y: {{ b.y }}},{% endfor %}],
-                        backgroundColor: 'rgba(67,99,216,0.85)',
-                        borderColor: '#4363d8',
-                        showLine: true,
-                        pointRadius: 6,
-                        pointHoverRadius: 8
-                    },
-                    {
-                        label: 'Perfect calibration (y = x)',
-                        type: 'line',
-                        data: [{x: 0, y: 0}, {x: calibMax, y: calibMax}],
-                        borderColor: '#999',
-                        borderDash: [5,5],
-                        borderWidth: 1,
-                        pointRadius: 0,
-                        fill: false
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'bottom' },
-                    tooltip: {
-                        callbacks: {
-                            label: function(ctx) {
-                                if (ctx.datasetIndex !== 0) return ctx.dataset.label;
-                                const n = calibN[ctx.dataIndex];
-                                return `Avg predicted ${ctx.parsed.x}, avg actual ${ctx.parsed.y} (n=${n} hour-bins)`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: { title: { display: true, text: 'Avg. Predicted Detections (per bin)' }, beginAtZero: true, max: calibMax },
-                    y: { title: { display: true, text: 'Avg. Actual Detections (per bin)' }, beginAtZero: true, max: calibMax }
-                }
-            }
-        });
-
         const coefProbs = [{% for p in mlops.coef_probs %}{{ p if p is not none else 'null' }},{% endfor %}];
         const coefChartInstance = new Chart(document.getElementById('coefChart'), {
             type: 'bar',
@@ -216,7 +161,7 @@
             }
         });
 
-        const _allCharts = [hodChartInstance, fitCalibChartInstance, coefChartInstance];
+        const _allCharts = [hodChartInstance, coefChartInstance];
         let _resizeTimer;
         window.addEventListener('resize', () => {
             clearTimeout(_resizeTimer);
