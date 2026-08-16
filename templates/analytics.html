@@ -24,6 +24,7 @@
         h2 { text-align: center; color: #333; font-size: 0.95em; margin-top: 0; }
         .chart-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 1000px; margin: 20px auto; }
         .chart-container { position: relative; height: 350px; width: 100%; }
+        .chart-note { font-size: 0.8em; color: #666; margin: 0 0 10px; text-align: center; }
         nav { text-align: center; margin-bottom: 20px; }
         nav a { margin: 0 10px; text-decoration: none; color: #2c7a2c; font-weight: bold; }
         table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
@@ -33,13 +34,6 @@
         .promoted-no { color: #999; }
         .model-desc { font-size: 0.85em; line-height: 1.6; color: #333; }
         .formula-box { background: #f0f2f5; border-left: 3px solid #4a7c3f; padding: 14px 16px; margin: 14px 0; font-family: "Courier New", monospace; font-size: 1.3em; overflow-x: auto; }
-        .heatmap-note { font-size: 0.8em; color: #666; margin: 0 0 10px; }
-        .heatmap-table { border-collapse: collapse; font-size: 0.62em; width: 100%; }
-        .heatmap-table th, .heatmap-table td { padding: 0; text-align: center; height: 16px; }
-        .heatmap-table th { font-weight: 400; color: #777; }
-        .heatmap-species { text-align: left !important; white-space: nowrap; padding-right: 6px !important; font-size: 1.15em; color: #333; }
-        .heatmap-legend { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 0.75em; color: #666; }
-        .heatmap-legend .swatch { width: 14px; height: 10px; display: inline-block; }
         @media (max-width: 600px) {
             .model-desc { font-size: 0.78em; }
             .formula-box { font-size: 0.6em; padding: 10px; }
@@ -65,8 +59,15 @@
     <h1>MLOps Model Results</h1>
 
     <div class="chart-card">
-        <h2># of Predicted vs Actual Detections</h2>
-        <div class="chart-container"><canvas id="predActualChart"></canvas></div>
+        <h2>Predicted vs Actual — by Hour of Day</h2>
+        <p class="chart-note">Averaged across every date in the training data, so this shows the daily activity shape rather than a specific day.</p>
+        <div class="chart-container"><canvas id="hodChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+        <h2>Predicted vs Actual — Model Fit (Last 30 Days)</h2>
+        <p class="chart-note">Each dot is one hour-bin from the most recent 30 days in the training data. Dots on the dashed line mean the prediction matched exactly.</p>
+        <div class="chart-container"><canvas id="fitScatterChart"></canvas></div>
     </div>
 
     <div class="chart-card">
@@ -108,43 +109,15 @@
     </div>
     {% endif %}
 
-    <h1>Top 10 Species — Activity by Time of Day (Last 30 Days)</h1>
-    <div class="chart-card">
-        <p class="heatmap-note">Each row is a species. Each column is a 30-minute window. Darker = higher share of active days in that window.</p>
-        <div style="overflow-x:auto;">
-        <table class="heatmap-table">
-            <tr><th></th>{% for b in buckets %}<th>{{ b if loop.index0 % 2 == 0 else '' }}</th>{% endfor %}</tr>
-            {% for d in datasets %}
-            {% set row_max = d['values'] | max %}
-            <tr>
-                <td class="heatmap-species">{{ d.label }}</td>
-                {% for v in d['values'] %}
-                {% set intensity = (v / row_max) if row_max > 0 else 0 %}
-                <td style="background: rgba(46,125,50,{{ (intensity ** 0.6) | round(2) }});" title="{{ d.label }}, {{ buckets[loop.index0] }} — {{ v }}% of this species' active-day windows"></td>
-                {% endfor %}
-            </tr>
-            {% endfor %}
-        </table>
-        </div>
-        <div class="heatmap-legend">
-            <span>Fewer active days</span>
-            <span class="swatch" style="background: rgba(46,125,50,0.1);"></span>
-            <span class="swatch" style="background: rgba(46,125,50,0.3);"></span>
-            <span class="swatch" style="background: rgba(46,125,50,0.6);"></span>
-            <span class="swatch" style="background: rgba(46,125,50,0.9);"></span>
-            <span>More active days</span>
-        </div>
-    </div>
-
     {% if mlops %}
     <script>
-        const predActualChartInstance = new Chart(document.getElementById('predActualChart'), {
+        const hodChartInstance = new Chart(document.getElementById('hodChart'), {
             type: 'line',
             data: {
-                labels: [{% for l in mlops.pred_labels %}'{{ l }}',{% endfor %}],
+                labels: [{% for l in mlops.hod_labels %}'{{ l }}',{% endfor %}],
                 datasets: [
-                    { label: 'Actual', data: [{% for v in mlops.pred_actual %}{{ v }},{% endfor %}], borderColor: '#3cb44b', fill: false, tension: 0.3 },
-                    { label: 'Predicted', data: [{% for v in mlops.pred_predicted %}{{ v }},{% endfor %}], borderColor: '#4363d8', fill: false, tension: 0.3, borderDash: [5,5] }
+                    { label: 'Actual', data: [{% for v in mlops.hod_actual %}{{ v }},{% endfor %}], borderColor: '#3cb44b', fill: false, tension: 0.3 },
+                    { label: 'Predicted', data: [{% for v in mlops.hod_predicted %}{{ v }},{% endfor %}], borderColor: '#4363d8', fill: false, tension: 0.3, borderDash: [5,5] }
                 ]
             },
             options: {
@@ -152,8 +125,42 @@
                 maintainAspectRatio: false,
                 plugins: { legend: { position: 'bottom' } },
                 scales: {
-                    y: { title: { display: true, text: 'Total Detections (all species)' }, beginAtZero: true },
-                    x: { ticks: { maxRotation: 90, minRotation: 45 } }
+                    y: { title: { display: true, text: 'Avg. Detections (all species)' }, beginAtZero: true },
+                    x: { title: { display: true, text: 'Hour of Day' } }
+                }
+            }
+        });
+
+        const scatterMax = {{ mlops.scatter_max }};
+        const fitScatterChartInstance = new Chart(document.getElementById('fitScatterChart'), {
+            type: 'scatter',
+            data: {
+                datasets: [
+                    {
+                        label: 'Hour-bin (actual, predicted)',
+                        data: [{% for p in mlops.scatter_points %}{x: {{ p.x }}, y: {{ p.y }}},{% endfor %}],
+                        backgroundColor: 'rgba(67,99,216,0.55)',
+                        pointRadius: 4
+                    },
+                    {
+                        label: 'Perfect fit (y = x)',
+                        type: 'line',
+                        data: [{x: 0, y: 0}, {x: scatterMax, y: scatterMax}],
+                        borderColor: '#999',
+                        borderDash: [5,5],
+                        borderWidth: 1,
+                        pointRadius: 0,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                scales: {
+                    x: { title: { display: true, text: 'Actual Detections' }, beginAtZero: true },
+                    y: { title: { display: true, text: 'Predicted Detections' }, beginAtZero: true }
                 }
             }
         });
@@ -194,7 +201,7 @@
             }
         });
 
-        const _allCharts = [predActualChartInstance, coefChartInstance];
+        const _allCharts = [hodChartInstance, fitScatterChartInstance, coefChartInstance];
         let _resizeTimer;
         window.addEventListener('resize', () => {
             clearTimeout(_resizeTimer);

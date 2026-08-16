@@ -258,17 +258,36 @@ def load_mlops_data():
             hourly[hb]["actual"] += float(row["count"])
             hourly[hb]["predicted"] += float(row["predicted"])
 
-    hourly_sorted = sorted(hourly.items())
-    from datetime import datetime as _dt2
-    def _fmt_label(h):
+    from datetime import datetime as _dt2, timedelta as _timedelta
+    def _parse_hb(h):
         try:
-            dt = _dt2.strptime(h, "%Y-%m-%d %H:%M:%S")
+            return _dt2.strptime(h, "%Y-%m-%d %H:%M:%S")
         except ValueError:
-            dt = _dt2.strptime(h, "%Y-%m-%d %H:%M")
-        return dt.strftime("%b %d: %H")
-    pred_labels = [_fmt_label(h) for h, _ in hourly_sorted]
-    pred_actual = [round(v["actual"], 1) for _, v in hourly_sorted]
-    pred_predicted = [round(v["predicted"], 1) for _, v in hourly_sorted]
+            return _dt2.strptime(h, "%Y-%m-%d %H:%M")
+    hourly_parsed = {hb: (_parse_hb(hb), v) for hb, v in hourly.items()}
+
+    # Hour-of-day view: collapse every date onto a single 5am-8pm axis, averaged
+    # across all dates present in this version's predictions.csv.
+    HOD_HOURS = list(range(5, 21))
+    hod_acc = {h: {"actual": [], "predicted": []} for h in HOD_HOURS}
+    for dt, v in hourly_parsed.values():
+        if dt.hour in hod_acc:
+            hod_acc[dt.hour]["actual"].append(v["actual"])
+            hod_acc[dt.hour]["predicted"].append(v["predicted"])
+    hod_labels = [f"{h:02d}:00" for h in HOD_HOURS]
+    hod_actual = [round(sum(hod_acc[h]["actual"]) / len(hod_acc[h]["actual"]), 1) if hod_acc[h]["actual"] else 0 for h in HOD_HOURS]
+    hod_predicted = [round(sum(hod_acc[h]["predicted"]) / len(hod_acc[h]["predicted"]), 1) if hod_acc[h]["predicted"] else 0 for h in HOD_HOURS]
+
+    # Fit-quality scatter: one point per hour-bin, restricted to the most recent
+    # 30 days present in the file (predictions.csv is a point-in-time snapshot,
+    # so "recent" is relative to the data itself, not to today's real date).
+    all_dates = [dt for dt, _ in hourly_parsed.values()]
+    cutoff = (max(all_dates) - _timedelta(days=30)) if all_dates else None
+    scatter_points = [
+        {"x": round(v["actual"], 1), "y": round(v["predicted"], 1)}
+        for dt, v in hourly_parsed.values() if cutoff is None or dt >= cutoff
+    ]
+    scatter_max = max([p["x"] for p in scatter_points] + [p["y"] for p in scatter_points] + [1])
 
     FRIENDLY_NAMES = {
         "tempf": "Temp",
@@ -293,7 +312,7 @@ def load_mlops_data():
         coef_probs = [round(sig.get(k.replace("beta_", ""), {}).get("prob_same_sign", 0), 3) for k in coef_keys]
 
     version_table = []
-    for v in reversed(registry["versions"]):
+    for v in list(reversed(registry["versions"]))[:10]:
         with open(MLOPS_MODELS_DIR / v / "metadata.json") as f:
             m = _json.load(f)
         raw_metric = m.get("elpd_loo", m.get("log_likelihood"))
@@ -309,9 +328,11 @@ def load_mlops_data():
         })
 
     return {
-        "pred_labels": pred_labels,
-        "pred_actual": pred_actual,
-        "pred_predicted": pred_predicted,
+        "hod_labels": hod_labels,
+        "hod_actual": hod_actual,
+        "hod_predicted": hod_predicted,
+        "scatter_points": scatter_points,
+        "scatter_max": scatter_max,
         "coef_labels": coef_labels,
         "coef_means": coef_means,
         "coef_sds": coef_sds,
@@ -449,53 +470,8 @@ def get_dueling_data():
 def analytics():
     mlops_data = load_mlops_data()
     corr_data = get_wittboy_correlation()
-    conn = sqlite3.connect(DB_FILE)
-    top10 = conn.execute("""
-        SELECT Com_Name, COUNT(*) as c
-        FROM detections_alltime
-        WHERE Date >= date('now','-30 days')
-        GROUP BY Com_Name
-        ORDER BY c DESC
-        LIMIT 10
-    """).fetchall()
-    species_list = [r[0] for r in top10]
 
-    buckets = []
-    h, m = 5, 0
-    while (h, m) < (20, 0):
-        buckets.append(f"{h:02d}:{m:02d}")
-        m += 30
-        if m == 60:
-            m = 0
-            h += 1
-
-    data = {s: {b: 0 for b in buckets} for s in species_list}
-
-    if species_list:
-        placeholders = ",".join("?" * len(species_list))
-        rows = conn.execute(f"""
-            SELECT Com_Name,
-                   substr(Time,1,2) || ':' || CASE WHEN CAST(substr(Time,4,2) AS INTEGER) < 30 THEN '00' ELSE '30' END AS bucket,
-                   COUNT(DISTINCT Date) as days_active
-            FROM detections_alltime
-            WHERE Date >= date('now','-30 days')
-              AND Com_Name IN ({placeholders})
-              AND Time >= '05:00:00' AND Time < '20:00:00'
-            GROUP BY Com_Name, bucket
-        """, species_list).fetchall()
-        for com_name, bucket, days_active in rows:
-            if bucket in data.get(com_name, {}):
-                data[com_name][bucket] = days_active
-
-    conn.close()
-
-    datasets = []
-    for s in species_list:
-        total = sum(data[s].values()) or 1
-        pct_values = [round(data[s][b] / total * 100, 1) for b in buckets]
-        datasets.append({"label": s, "values": pct_values})
-
-    resp = make_response(render_template("analytics.html", buckets=buckets, datasets=datasets, mlops=mlops_data, corr=corr_data))
+    resp = make_response(render_template("analytics.html", mlops=mlops_data, corr=corr_data))
     resp.headers["Cache-Control"] = "no-store, must-revalidate"
     return resp
 
