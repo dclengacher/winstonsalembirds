@@ -66,7 +66,7 @@
 
     <div class="chart-card">
         <h2>Predicted vs Actual — Model Fit (Last 30 Days)</h2>
-        <p class="chart-note">Each dot is one hour-bin from the most recent 30 days in the training data. Dots on the dashed line mean the prediction matched exactly.</p>
+        <p class="chart-note">Each dot is one hour-bin from the most recent 30 days in the training data. Dots on the dashed line mean the prediction matched exactly. Axis capped near the 90th percentile for readability{{ " — " ~ mlops.scatter_clipped_count ~ " extreme point" ~ ("s" if mlops.scatter_clipped_count != 1 else "") ~ " render off-chart" if mlops.scatter_clipped_count else "" }}.</p>
         <div class="chart-container"><canvas id="fitScatterChart"></canvas></div>
     </div>
 
@@ -159,8 +159,8 @@
                 maintainAspectRatio: false,
                 plugins: { legend: { position: 'bottom' } },
                 scales: {
-                    x: { title: { display: true, text: 'Actual Detections' }, beginAtZero: true },
-                    y: { title: { display: true, text: 'Predicted Detections' }, beginAtZero: true }
+                    x: { title: { display: true, text: 'Actual Detections' }, beginAtZero: true, max: scatterMax },
+                    y: { title: { display: true, text: 'Predicted Detections' }, beginAtZero: true, max: scatterMax }
                 }
             }
         });

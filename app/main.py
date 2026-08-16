@@ -287,7 +287,17 @@ def load_mlops_data():
         {"x": round(v["actual"], 1), "y": round(v["predicted"], 1)}
         for dt, v in hourly_parsed.values() if cutoff is None or dt >= cutoff
     ]
-    scatter_max = max([p["x"] for p in scatter_points] + [p["y"] for p in scatter_points] + [1])
+    # Cap the axis near the 90th percentile rather than the true max, so a
+    # handful of extreme burst hours don't stretch the scale and squish
+    # every well-fit low-count point into the corner. Points beyond the cap
+    # still exist in scatter_points; they just render off-chart.
+    _combined = sorted([p["x"] for p in scatter_points] + [p["y"] for p in scatter_points])
+    if _combined:
+        _idx = int(0.90 * (len(_combined) - 1))
+        scatter_max = round(max(_combined[_idx] * 1.15, 1), 1)
+    else:
+        scatter_max = 1
+    scatter_clipped_count = sum(1 for p in scatter_points if p["x"] > scatter_max or p["y"] > scatter_max)
 
     FRIENDLY_NAMES = {
         "tempf": "Temp",
@@ -333,6 +343,7 @@ def load_mlops_data():
         "hod_predicted": hod_predicted,
         "scatter_points": scatter_points,
         "scatter_max": scatter_max,
+        "scatter_clipped_count": scatter_clipped_count,
         "coef_labels": coef_labels,
         "coef_means": coef_means,
         "coef_sds": coef_sds,
