@@ -124,7 +124,7 @@
                         <td><a class="wiki-link" href="https://en.wikipedia.org/wiki/{{ bird[0]|urlencode }}" target="_blank">Wiki ↗</a></td>
                         <td>
                             {% if bird[5] and bird[6] %}
-                            <audio controls style="width:150px;height:30px;">
+                            <audio controls preload="none" class="lazy-audio" style="width:150px;height:30px;">
                                 <source src="/audio/{{ bird[6] }}/{{ bird[0].replace(' ', '_') }}/{{ bird[5] }}" type="audio/mpeg">
                             </audio>
                             {% endif %}
@@ -296,6 +296,16 @@
         const email = document.getElementById("subscribe-email").value;
         fetch("/subscribe", { method: "POST", headers: {"Content-Type":"application/x-www-form-urlencoded"}, body: "email=" + encodeURIComponent(email) })
             .then(r => { if (r.ok) { document.getElementById("subscribe-form").style.display = "none"; document.getElementById("subscribe-msg").style.display = "block"; } });
+    });
+    // Load each clip's audio data one at a time, staggered, instead of letting the
+    // browser fire every <audio> request at once -- with 10+ clips on the page,
+    // firing them all simultaneously blows past the browser's per-host connection
+    // limit, so several just hang forever (stuck grey play button, never loads).
+    // Staggering means every clip actually finishes loading and is ready to play
+    // before you'd ever click it, without the browser trying to preload them all
+    // itself the moment the page loads.
+    document.querySelectorAll('audio.lazy-audio').forEach((audio, i) => {
+        setTimeout(() => audio.load(), i * 400);
     });
 </script>
 </body>
