@@ -41,7 +41,7 @@
         <div class="header-row">
             <span></span><span>Species</span><span>Predicted activity by hour</span><span style="text-align:right;font-weight:bold;">Peak hour</span>
         </div>
-        <div style="display:grid;grid-template-columns:45px 78px minmax(140px,1fr) 100px;gap:12px;padding:0 4px 4px;font-size:0.7rem;color:#aaa;"><span></span><span></span><div style="display:flex;justify-content:space-between;font-weight:bold;"><span>5am</span><span>8pm</span></div><span></span></div>
+        <div style="display:grid;grid-template-columns:45px 78px minmax(140px,1fr) 100px;gap:12px;padding:0 4px 4px;font-size:0.7rem;color:#aaa;"><span></span><span></span><div style="display:flex;justify-content:space-between;font-weight:bold;"><span>5am</span><span>Noon</span><span>8pm</span></div><span></span></div>
         {% for s in clock_data.species %}
         <div class="species-row">
             <img class="bird-thumb-sm" id="bm-img-{{ loop.index }}" data-name="{{ s.name }}" alt="{{ s.name }}"
