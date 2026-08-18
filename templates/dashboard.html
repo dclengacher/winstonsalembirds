@@ -124,7 +124,7 @@
                         <td><a class="wiki-link" href="https://en.wikipedia.org/wiki/{{ bird[0]|urlencode }}" target="_blank">Wiki ↗</a></td>
                         <td>
                             {% if bird[5] and bird[6] %}
-                            <audio controls preload="none" style="width:150px;height:30px;">
+                            <audio controls style="width:150px;height:30px;">
                                 <source src="/audio/{{ bird[6] }}/{{ bird[0].replace(' ', '_') }}/{{ bird[5] }}" type="audio/mpeg">
                             </audio>
                             {% endif %}
