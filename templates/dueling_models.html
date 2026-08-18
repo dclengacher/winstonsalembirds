@@ -22,6 +22,16 @@
         .legend-row { display: flex; gap: 20px; font-size: 0.85rem; margin: 10px 0 4px; }
         .legend-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
         canvas { max-height: 320px; }
+        .model-compare { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; }
+        .model-panel { flex: 1; min-width: 280px; background: #fafbfc; border-radius: 8px; padding: 16px; }
+        .model-panel h3 { margin: 0 0 2px; color: #2c3e50; font-size: 1.05rem; }
+        .model-panel .subhead { margin: 0 0 10px; color: #888; font-size: 0.8rem; }
+        .formula { background: #f4f6f8; border-radius: 6px; padding: 8px 10px; font-family: monospace; font-size: 0.78rem; color: #444; line-height: 1.5; }
+        .model-chart-caption { text-align: center; color: #999; font-size: 0.75rem; margin: -4px 0 12px; }
+        .callout { border-radius: 6px; padding: 8px 10px; font-size: 0.82rem; margin-bottom: 8px; line-height: 1.4; }
+        .callout strong { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+        .callout.strength { background: #eaf5ea; border-left: 4px solid #4a7c3f; }
+        .callout.limitation { background: #fdf1e8; border-left: 4px solid #c0742b; }
     </style>
 </head>
 <body>
@@ -34,6 +44,41 @@
         <a href="/" class="nav-link">Dashboard</a>
         <a href="/bird-models" class="nav-link">Bird Models</a>
         <a href="/analytics" class="nav-link">Behind the Numbers</a>
+    </div>
+    <div class="card">
+        <h2 style="margin-top:0;">Two Ways of Modeling "When Do Birds Sing?"</h2>
+        <p style="color:#555;margin-top:-6px;">Both models see the same detections. They just assume a different shape for the daily pattern.</p>
+        <div class="model-compare">
+            <div class="model-panel" style="border-top:4px solid #1a4a6e;">
+                <h3>Model 1: Quadratic (Bayesian)</h3>
+                <p class="subhead">assumes one smooth rise-and-fall curve per species</p>
+                <div class="formula">log(detections) ~<br>&nbsp;&nbsp;β₁·TimeOfDay + β₂·TimeOfDay²<br>&nbsp;&nbsp;+ Temp + Humidity + Pressure + Rain<br>&nbsp;&nbsp;+ (per-species baseline)</div>
+                <svg viewBox="0 0 280 100" width="100%" height="100" style="display:block;margin:10px 0;">
+                    <line x1="10" y1="85" x2="270" y2="85" stroke="#ddd" stroke-width="1"/>
+                    <path d="M10,82 C 30,82 42,15 62,11 C 85,8 110,28 150,51 C 190,71 230,81 270,84" fill="none" stroke="#1a4a6e" stroke-width="2.5"/>
+                    <text x="12" y="97" font-size="9" fill="#999">5am</text>
+                    <text x="248" y="97" font-size="9" fill="#999">8pm</text>
+                </svg>
+                <p class="model-chart-caption">one example species — sharp morning peak, long tail into evening</p>
+                <div class="callout strength"><strong>Strength</strong>Smooth fitting of peak activity hours, even with limited data per species.</div>
+                <div class="callout limitation"><strong>Limitation</strong>Can only represent one dominant peak. A species active at both dawn AND dusk gets averaged into a single, blurred hump — the second peak is suppressed.</div>
+            </div>
+            <div class="model-panel" style="border-top:4px solid #c0392b;">
+                <h3>Model 2: Categorical (Hour-by-Hour)</h3>
+                <p class="subhead">assumes nothing — estimates every hour independently</p>
+                <div class="formula">log(detections) ~<br>&nbsp;&nbsp;β<sub>hour</sub>[TimeOfDay]<br>&nbsp;&nbsp;+ Temp + Humidity + Pressure + Rain<br>&nbsp;&nbsp;+ (per-species baseline)</div>
+                <svg viewBox="0 0 280 100" width="100%" height="100" style="display:block;margin:10px 0;">
+                    <line x1="10" y1="85" x2="270" y2="85" stroke="#ddd" stroke-width="1"/>
+                    <polyline points="10,80 28,64 46,23 64,41 82,73 100,78 118,82 136,76 154,80 172,55 190,20 208,36 226,68 244,80 270,82"
+                              fill="none" stroke="#c0392b" stroke-width="2.5"/>
+                    <text x="12" y="97" font-size="9" fill="#999">5am</text>
+                    <text x="248" y="97" font-size="9" fill="#999">8pm</text>
+                </svg>
+                <p class="model-chart-caption">same species — jagged, hour-to-hour — can show two separate peaks</p>
+                <div class="callout strength"><strong>Strength</strong>Can represent multiple independent peaks (e.g. dawn AND dusk activity) — no assumption about a single shape.</div>
+                <div class="callout limitation"><strong>Limitation</strong>Roughly double the parameters to estimate. Noisier — some of that jaggedness may just be sampling noise, not a real pattern.</div>
+            </div>
+        </div>
     </div>
     <div class="card">
         {% if duel_data.verdict %}
