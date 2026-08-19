@@ -43,13 +43,13 @@
             <span></span><span>Species</span><span>Share of weekly detections</span><span style="text-align:right;font-weight:bold;">Peak week</span>
         </div>
         <div style="display:grid;grid-template-columns:45px 78px minmax(140px,1fr) 100px;gap:12px;padding:0 4px 4px;font-size:0.7rem;color:#aaa;"><span></span><span></span><div style="display:flex;justify-content:space-between;font-weight:bold;"><span>{{ trend_data.week_labels[0] }}</span><span>{{ trend_data.week_labels[-1] }}</span></div><span></span></div>
+        {% set max_v = trend_data.global_max %}
         {% for s in trend_data.species %}
         <div class="species-row">
             <img class="bird-thumb-sm" id="st-img-{{ loop.index }}" data-name="{{ s.name }}" alt="{{ s.name }}"
                  src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><rect width='40' height='40' rx='6' fill='%23eee'/></svg>">
             <span style="font-size:13px;font-weight:500;">{{ s.name }}</span>
             <div class="bar-wrap" role="img" aria-label="{{ s.name }} weekly share of detections, peaking the week of {{ s.peak_week_label }}">
-                {% set max_v = s.curve|max %}
                 {% for v in s.curve %}
                 <div class="bar" style="height:{{ [((v/max_v)*100)|round, 4]|max if max_v > 0 else 4 }}%;"></div>
                 {% endfor %}

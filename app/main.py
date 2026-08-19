@@ -447,9 +447,16 @@ def get_seasonal_trend_data():
     for row in species_rows:
         del row["_peak_idx"]
 
+    # Bars are scaled against ONE shared max across every species, not each
+    # species' own max -- these percentages are directly comparable across
+    # species (unlike /bird-models' curves), so a common bird's dominant week
+    # should visibly dwarf a rare bird's, not get stretched to look the same.
+    global_max = max((max(c) for c in weekly_pct.values() if c), default=0)
+
     return {
         "week_labels": [w.strftime("%-m/%-d") for w in weeks],
         "species": species_rows,
+        "global_max": global_max,
     }
 
 
