@@ -25,8 +25,9 @@
         .chart-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 1000px; margin: 20px auto; }
         .chart-container { position: relative; height: 350px; width: 100%; }
         .chart-note { font-size: 0.8em; color: #666; margin: 0 0 10px; text-align: center; }
-        nav { text-align: center; margin-bottom: 20px; }
-        nav a { margin: 0 10px; text-decoration: none; color: #2c7a2c; font-weight: bold; }
+        .nav-bar { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; max-width:640px; margin:0 auto 20px; }
+        .nav-link { flex:1; min-width:140px; text-align:center; background:white; border:2px solid #1a1a1a; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); padding:14px 22px; color:#2c3e50; font-weight:bold; text-decoration:none; font-size:1rem; transition:0.15s; }
+        .nav-link:hover { box-shadow:0 4px 8px rgba(0,0,0,0.15); transform:translateY(-1px); }
         table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
         th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #eee; }
         th { background: #f0f0f0; }
@@ -49,11 +50,14 @@
     <script>Chart.defaults.devicePixelRatio = window.devicePixelRatio || 2;</script>
 </head>
 <body>
-    <nav>
-        <a href="/">Dashboard</a>
-        <a href="/alltime">All-Time</a>
-        <a href="/analytics">Analytics</a>
-    </nav>
+    <div class="nav-bar">
+        <a href="/" class="nav-link">Dashboard</a>
+        <a href="/alltime" class="nav-link">All-Time Species</a>
+        <a href="/bird-models" class="nav-link">Bird Models</a>
+        <a href="/dueling-models" class="nav-link">Dueling Models</a>
+        <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
+        <a href="/history" class="nav-link">Project History</a>
+    </div>
 
     {% if mlops %}
     <h1>MLOps Model Results</h1>

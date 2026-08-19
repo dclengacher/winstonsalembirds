@@ -27,6 +27,9 @@
         th { background-color: #f8f9fa; position: sticky; top: 0; }
         .table-scroll { max-height: 700px; overflow-y: auto; }
         a.back { display: inline-block; margin-bottom: 15px; color: #0066cc; text-decoration: none; }
+        .nav-bar { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; max-width:640px; margin:0 auto 15px; }
+        .nav-link { flex:1; min-width:140px; text-align:center; background:white; border:2px solid #1a1a1a; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); padding:14px 22px; color:#2c3e50; font-weight:bold; text-decoration:none; font-size:1rem; transition:0.15s; }
+        .nav-link:hover { box-shadow:0 4px 8px rgba(0,0,0,0.15); transform:translateY(-1px); }
     </style>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-2V6321XXM0"></script>
@@ -39,7 +42,14 @@
 </head>
 <body>
 <div class="container">
-    <a class="back" href="/">← Back to Live Dashboard</a> &nbsp;&nbsp; <a href="/analytics" style="color:#0066cc;font-weight:bold;text-decoration:none;">📊 View Analytics →</a>
+    <div class="nav-bar">
+        <a href="/" class="nav-link">Dashboard</a>
+        <a href="/bird-models" class="nav-link">Bird Models</a>
+        <a href="/dueling-models" class="nav-link">Dueling Models</a>
+        <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
+        <a href="/history" class="nav-link">Project History</a>
+        <a href="/analytics" class="nav-link">Analytics</a>
+    </div>
     <h1>All-Time Species Detected</h1>
     <div class="table-scroll">
     <table>
