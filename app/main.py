@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
 import subprocess
 import threading
@@ -382,6 +382,77 @@ def get_bird_clock_data():
     return {"hours": hours, "species": species_rows, "current_version": current}
 
 
+def get_seasonal_trend_data():
+    # Rolling window of the most recent 26 fully-CLOSED Monday-start weeks (never
+    # includes the current in-progress week -- this page only updates once a week
+    # ends). Each week's value is that species' share of the WEEK'S total detections
+    # across all species, not raw counts and not a share of the species' own
+    # all-time total -- dividing by the week's total cancels out anything that
+    # shifts detection volume for every species equally that week (a mic change,
+    # a stretch of rainy/windy days), so it doesn't masquerade as real migration.
+    registry_path = MLOPS_MODELS_DIR / "registry.json"
+    if not registry_path.exists():
+        return None
+    with open(registry_path) as f:
+        registry = _json.load(f)
+    current = registry.get("current_production")
+    if current is None:
+        return None
+    with open(MLOPS_MODELS_DIR / current / "random_effects.json") as f:
+        random_fx = _json.load(f)
+    species_names = list(random_fx.keys())
+
+    today = datetime.now().date()
+    this_monday = today - timedelta(days=today.weekday())
+    last_closed_monday = this_monday - timedelta(days=7)
+    candidate_starts = [last_closed_monday - timedelta(weeks=i) for i in range(25, -1, -1)]
+
+    conn = sqlite3.connect(DB_FILE)
+    weeks = []
+    weekly_pct = {name: [] for name in species_names}
+    window_totals = {name: 0 for name in species_names}
+    for ws in candidate_starts:
+        we = ws + timedelta(days=6)
+        rows = conn.execute(
+            "SELECT Com_Name, COUNT(*) FROM detections_alltime WHERE Date >= ? AND Date <= ? GROUP BY Com_Name",
+            (ws.isoformat(), we.isoformat())
+        ).fetchall()
+        total = sum(c for _, c in rows)
+        if total == 0:
+            continue  # no data yet this far back -- window grows toward 26 over time
+        counts = dict(rows)
+        weeks.append(ws)
+        for name in species_names:
+            n = counts.get(name, 0)
+            weekly_pct[name].append(round(100 * n / total, 2))
+            window_totals[name] += n
+    conn.close()
+
+    if not weeks:
+        return None
+
+    species_rows = []
+    for name in species_names:
+        curve = weekly_pct[name]
+        peak_idx = curve.index(max(curve)) if curve else 0
+        species_rows.append({
+            "name": name,
+            "curve": curve,
+            "peak_week_label": weeks[peak_idx].strftime("%-m/%-d"),
+            "pct_in_peak": round(curve[peak_idx]) if curve else 0,
+            "n_detections": window_totals[name],
+            "_peak_idx": peak_idx,
+        })
+    species_rows.sort(key=lambda r: r["_peak_idx"])
+    for row in species_rows:
+        del row["_peak_idx"]
+
+    return {
+        "week_labels": [w.strftime("%-m/%-d") for w in weeks],
+        "species": species_rows,
+    }
+
+
 WITTBOY_VARS = ["tempf", "humidity", "baromrelin", "winddir", "windspeedmph", "windgustmph", "solarradiation", "uv", "rainrate", "dailyrain"]
 
 def get_wittboy_correlation():
@@ -475,6 +546,11 @@ def bird_models():
 def dueling_models():
     duel_data = get_dueling_data()
     return render_template("dueling_models.html", duel_data=duel_data)
+
+@app.route("/seasonal-trends")
+def seasonal_trends():
+    trend_data = get_seasonal_trend_data()
+    return render_template("seasonal_trends.html", trend_data=trend_data)
 
 @app.route("/sitemap.xml")
 def sitemap():

@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Bird Models — Winston-Salem Bird Station</title>
-    <meta name="description" content="Predicted peak vocal activity hours for the top birds at the Winston-Salem Bird Station, from a Bayesian hierarchical model.">
-    <meta property="og:title" content="Bird Models — Winston-Salem Bird Station">
-    <meta property="og:description" content="Predicted peak vocal activity hours for top species, modeled from acoustic detection data.">
+    <title>Seasonal Trends — Winston-Salem Bird Station</title>
+    <meta name="description" content="Which weeks each bird species accounts for the largest share of activity, tracked over a rolling 26-week window.">
+    <meta property="og:title" content="Seasonal Trends — Winston-Salem Bird Station">
+    <meta property="og:description" content="Each species' share of weekly detections, over the last 26 closed weeks, to spot real seasonal patterns.">
     <meta property="og:image" content="https://winstonsalembirds.com/static/Dashboard.png">
-    <meta property="og:url" content="https://winstonsalembirds.com/bird-models">
+    <meta property="og:url" content="https://winstonsalembirds.com/seasonal-trends">
     <meta property="og:type" content="website">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
@@ -19,7 +19,7 @@
         .species-row { display: grid; grid-template-columns: 45px 78px minmax(140px,1fr) 100px; gap: 12px; align-items: center; padding: 10px 4px; border-top: 0.5px solid #ddd; }
         .species-row:first-of-type { border-top: none; }
         .bar-wrap { display: flex; align-items: flex-end; gap: 1px; height: 32px; }
-        .bar { flex: 1; background: #1a4a6e; border-radius: 1px 1px 0 0; }
+        .bar { flex: 1; background: #4a7c3f; border-radius: 1px 1px 0 0; }
         .header-row { display: grid; grid-template-columns: 45px 78px minmax(140px,1fr) 100px; gap: 12px; padding: 6px 4px; font-size: 0.75rem; color: #888; }
         .bird-thumb-sm { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; transform: scale(1.3); }
     </style>
@@ -27,37 +27,37 @@
 <body>
 <div class="container">
     <div style="text-align:center;">
-        <h1 style="margin:0;color:#2c3e50;">Bird Models</h1>
-        <p style="margin:5px 0 0;color:#666;font-size:1.05rem;">Model-estimated vocal activity by hour — not raw detection counts. Each curve adjusts for temperature, humidity, pressure, and rainfall, isolating the effect of time of day alone.</p>
+        <h1 style="margin:0;color:#2c3e50;">Seasonal Trends</h1>
+        <p style="margin:5px 0 0;color:#666;font-size:1.05rem;">Each species' share of that week's total detections — not raw counts — over a rolling 26-week window. Dividing by the week's total cancels out anything that shifts detection volume for every species equally, like a mic change or a stretch of bad weather, so what's left is closer to real seasonal activity.</p>
     </div>
     <div class="nav-bar">
         <a href="/" class="nav-link">Dashboard</a>
-        <a href="/alltime" class="nav-link">All-Time Species</a>
-        <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
+        <a href="/bird-models" class="nav-link">Bird Models</a>
+        <a href="/dueling-models" class="nav-link">Dueling Models</a>
         <a href="/analytics" class="nav-link">Analytics</a>
     </div>
     <div class="card">
-        {% if clock_data %}
-        <h2 style="margin-top:0;">Predicted peak activity hour by species</h2>
+        {% if trend_data %}
+        <h2 style="margin-top:0;">Peak week by species</h2>
         <div class="header-row">
-            <span></span><span>Species</span><span>Predicted activity by hour</span><span style="text-align:right;font-weight:bold;">Peak hour</span>
+            <span></span><span>Species</span><span>Share of weekly detections</span><span style="text-align:right;font-weight:bold;">Peak week</span>
         </div>
-        <div style="display:grid;grid-template-columns:45px 78px minmax(140px,1fr) 100px;gap:12px;padding:0 4px 4px;font-size:0.7rem;color:#aaa;"><span></span><span></span><div style="display:flex;justify-content:space-between;font-weight:bold;"><span>5am</span><span>Noon</span><span>8pm</span></div><span></span></div>
-        {% for s in clock_data.species %}
+        <div style="display:grid;grid-template-columns:45px 78px minmax(140px,1fr) 100px;gap:12px;padding:0 4px 4px;font-size:0.7rem;color:#aaa;"><span></span><span></span><div style="display:flex;justify-content:space-between;font-weight:bold;"><span>{{ trend_data.week_labels[0] }}</span><span>{{ trend_data.week_labels[-1] }}</span></div><span></span></div>
+        {% for s in trend_data.species %}
         <div class="species-row">
-            <img class="bird-thumb-sm" id="bm-img-{{ loop.index }}" data-name="{{ s.name }}" alt="{{ s.name }}"
+            <img class="bird-thumb-sm" id="st-img-{{ loop.index }}" data-name="{{ s.name }}" alt="{{ s.name }}"
                  src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><rect width='40' height='40' rx='6' fill='%23eee'/></svg>">
             <span style="font-size:13px;font-weight:500;">{{ s.name }}</span>
-            <div class="bar-wrap" role="img" aria-label="{{ s.name }} predicted activity by hour, peaking around {{ s.peak_hour }}:00">
+            <div class="bar-wrap" role="img" aria-label="{{ s.name }} weekly share of detections, peaking the week of {{ s.peak_week_label }}">
                 {% set max_v = s.curve|max %}
                 {% for v in s.curve %}
-                <div class="bar" style="height:{{ [((v/max_v)*100)|round, 4]|max }}%;"></div>
+                <div class="bar" style="height:{{ [((v/max_v)*100)|round, 4]|max if max_v > 0 else 4 }}%;"></div>
                 {% endfor %}
             </div>
-            <span style="text-align:right;"><strong style="font-size:14px;color:#2c3e50;">{{ s.pct_in_peak }}%</strong><span style="color:#777;font-size:14px;"> @ {{ s.peak_hour }}:00</span><br><span style="color:#999;font-size:14px;">n={{ s.n_detections }}</span></span>
+            <span style="text-align:right;"><strong style="font-size:14px;color:#2c3e50;">{{ s.pct_in_peak }}%</strong><span style="color:#777;font-size:14px;"> @ {{ s.peak_week_label }}</span><br><span style="color:#999;font-size:14px;">n={{ s.n_detections }}</span></span>
         </div>
         {% endfor %}
-        <p style="margin:16px 0 0;font-size:0.75rem;color:#999;">Based on model version {{ clock_data.current_version }}. Updates automatically when a new model is promoted.</p>
+        <p style="margin:16px 0 0;font-size:0.75rem;color:#999;">Showing {{ trend_data.week_labels|length }} closed week{{ '' if trend_data.week_labels|length == 1 else 's' }} (rolling window, up to 26). Updates once each week ends — not daily.</p>
         {% else %}
         <p>No model data available yet.</p>
         {% endif %}
