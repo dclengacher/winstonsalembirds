@@ -111,9 +111,9 @@ h2 {
     <div style="text-align:center;">
         <h1 style="margin:0;color:#2c3e50;">Seasonal Trends</h1>
         {% if trend_data and trend_data.outlier %}
-        <p style="margin:5px 0 0;color:#666;font-size:0.95rem;">Read it like a leaderboard: each week's tallest bar is that week's most-detected species, over a rolling 26-week window. {{ trend_data.outlier.name }} wins so often it gets bumped to its own scale up top so it doesn't flatten everyone else — below the line, tallest bar is the runner-up. It's each species' share of the week's total, not raw counts, so a mic change or a rainy week can't fake a seasonal trend.</p>
+        <p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Read it like a leaderboard: each week's tallest bar is that week's most-detected species, over a rolling 26-week window. {{ trend_data.outlier.name }} wins so often it gets bumped to its own scale up top so it doesn't flatten everyone else — below the line, tallest bar is the runner-up. It's each species' share of the week's total, not raw counts, so a mic change or a rainy week can't fake a seasonal trend.</p>
         {% else %}
-        <p style="margin:5px 0 0;color:#666;font-size:0.95rem;">Read it like a leaderboard: each week's tallest bar is that week's most-detected species, over a rolling 26-week window. It's each species' share of the week's total, not raw counts, so a mic change or a rainy week can't fake a seasonal trend.</p>
+        <p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Read it like a leaderboard: each week's tallest bar is that week's most-detected species, over a rolling 26-week window. It's each species' share of the week's total, not raw counts, so a mic change or a rainy week can't fake a seasonal trend.</p>
         {% endif %}
     </div>
     <div class="nav-bar">
