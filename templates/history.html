@@ -18,8 +18,93 @@
       "description": "How the Winston-Salem Bird Station was built: the Raspberry Pi hardware, BirdNET-Pi setup, and the story behind this acoustic bird monitoring project."
     }
     </script>
-    <link rel="stylesheet" href="/static/site.css">
     <style>
+/* Shared site styles — single source of truth for typography + nav across all pages */
+
+body {
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+  margin: 20px;
+  background-color: #f4f6f8;
+  color: #333;
+}
+
+h1 {
+  font-size: 1.5rem;
+  color: #2c3e50;
+  text-align: center;
+  margin: 0 0 4px;
+}
+
+h2 {
+  font-size: 1.1rem;
+  color: #333;
+  text-align: center;
+  margin-top: 0;
+}
+
+.page-subtitle {
+  margin: 5px 0 0;
+  color: #666;
+  font-size: 1rem;
+  text-align: center;
+}
+
+.nav-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  max-width: 640px;
+  margin: 0 auto 15px;
+}
+
+.nav-link {
+  flex: 1;
+  min-width: 140px;
+  text-align: center;
+  background: white;
+  border: 2px solid #1a1a1a;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 14px 22px;
+  color: #2c3e50;
+  font-weight: bold;
+  text-decoration: none;
+  font-size: 1rem;
+  transition: 0.15s;
+}
+
+.nav-link:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
+}
+
+/* Phone only — laptop stays untouched */
+@media (max-width: 600px) {
+  body { margin: 10px; }
+
+  h1 { font-size: 1.25rem; }
+  h2 { font-size: 1rem; }
+  .page-subtitle { font-size: 0.9rem; }
+
+  .nav-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    max-width: 100%;
+    margin: 0 auto 10px;
+  }
+
+  .nav-link {
+    flex: initial;
+    min-width: 0;
+    padding: 8px 4px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    border-radius: 6px;
+  }
+}
+
         .container { display: flex; flex-direction: column; gap: 25px; max-width: 900px; margin: 0 auto; }
         .back-link { display: inline-block; margin-bottom: 10px; color: #0066cc; font-weight: bold; text-decoration: none; }
         .subtitle { text-align: center; color: #666; margin-top: 5px; margin-bottom: 30px; }
