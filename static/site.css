@@ -67,14 +67,19 @@ h2 {
   .page-subtitle { font-size: 0.9rem; }
 
   .nav-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 6px;
+    max-width: 100%;
     margin: 0 auto 10px;
   }
 
   .nav-link {
+    flex: initial;
     min-width: 0;
-    padding: 6px 8px;
-    font-size: 0.75rem;
+    padding: 8px 4px;
+    font-size: 0.72rem;
+    line-height: 1.2;
     border-radius: 6px;
   }
 }
