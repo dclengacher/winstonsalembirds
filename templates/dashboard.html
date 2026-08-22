@@ -124,6 +124,7 @@ h2 {
         canvas { width: 100% !important; height: 200px !important; }
         .full-width-chart { grid-column: 1 / -1; }
         .full-width-chart canvas { height: 280px !important; }
+        .award-card { white-space: nowrap; }
 
         /* This page's header is deliberately more compact on phones than the shared
            1.25rem mobile default, and .row-top's fixed min-widths (320px + 600px)
@@ -138,6 +139,10 @@ h2 {
                needs an explicit width plus its own scroll container rather than
                being left to blow out the page horizontally. */
             .table-section { min-width: 0; width: 100%; box-sizing: border-box; overflow-x: auto; }
+            /* Nowrap is fine on desktop where there's room for a single-line badge,
+               but it's what forced these ~420-470px wide against ~355px available,
+               causing real page-level horizontal overflow on phones. */
+            .award-card { white-space: normal; }
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -158,13 +163,13 @@ h2 {
         {% include "partials/header.html" %}
     <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:20px;">
     {% if early_bird %}
-    <div style="background:linear-gradient(135deg,#fff9db,#ffe58a);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:8px 14px;margin:0;max-width:480px;white-space:nowrap;display:flex;align-items:center;gap:10px;justify-content:center;">
+    <div class="award-card" style="background:linear-gradient(135deg,#fff9db,#ffe58a);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:8px 14px;margin:0;max-width:480px;display:flex;align-items:center;gap:10px;justify-content:center;">
         <img id="img-earlybird" class="bird-thumb" data-sci="{{ early_bird.sci_name }}" src="" style="width:46px;height:46px;border-radius:8px;object-fit:cover;background:#eee;">
         <span style="font-size:0.95rem;color:#1a4a6e;"><span style="font-size:1.5rem;vertical-align:middle;">☀️</span> <strong>Early Bird Award</strong> : <strong>{{ early_bird.com_name }}</strong> at {{ early_bird.time }}!</span>
     </div>
     {% endif %}
     {% if night_owl %}
-    <div style="background:linear-gradient(135deg,#1e2a3a,#2c3e50);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:8px 14px;margin:0;max-width:480px;white-space:nowrap;display:flex;align-items:center;gap:10px;justify-content:center;">
+    <div class="award-card" style="background:linear-gradient(135deg,#1e2a3a,#2c3e50);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:8px 14px;margin:0;max-width:480px;display:flex;align-items:center;gap:10px;justify-content:center;">
         <img id="img-nightowl" class="bird-thumb" data-sci="{{ night_owl.sci_name }}" src="" style="width:46px;height:46px;border-radius:8px;object-fit:cover;background:#eee;">
         <span style="font-size:0.95rem;color:#f0f4f8;"><span style="font-size:1.5rem;vertical-align:middle;">🦉</span> <strong>Night Owl Award</strong> : <strong>{{ night_owl.com_name }}</strong> at {{ night_owl.time }}!</span>
     </div>
