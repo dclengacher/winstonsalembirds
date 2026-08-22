@@ -83,7 +83,7 @@ h2 {
 
 /* Phone only — laptop stays untouched */
 @media (max-width: 600px) {
-  body { margin: 10px; }
+  body { margin: 10px; zoom: 0.85; }
 
   h1 { font-size: 1.25rem; }
   h2 { font-size: 1rem; }
@@ -261,14 +261,6 @@ h2 {
             <canvas id="windChart"></canvas>
         </div>
 
-        <div class="chart-card" style="background:#0d1b2a;">
-            <h3 style="color:#e8e8e8;">Phase of the Moon</h3>
-            <div id="moonDial"></div>
-            <div style="color:#7fd8ff;font-size:0.8rem;margin-top:8px;">
-                {{ moon_phase.illumination_pct }}% illuminated &middot; {{ moon_phase.name }}
-            </div>
-        </div>
-
         <div class="chart-card">
             <h3>Daily Rain Total</h3>
             <div class="current-val">{{ dailyrains[-1] if dailyrains else '--' }} in</div>
@@ -280,6 +272,14 @@ h2 {
             <div id="sunDial"></div>
             <div style="color:#7fd8ff;font-size:0.8rem;margin-top:8px;">
                 Sunrise {{ sun_times.sunrise }} &middot; Sunset {{ sun_times.sunset }}
+            </div>
+        </div>
+
+        <div class="chart-card" style="background:#0d1b2a;">
+            <h3 style="color:#e8e8e8;">Phase of the Moon</h3>
+            <div id="moonDial"></div>
+            <div style="color:#7fd8ff;font-size:0.8rem;margin-top:8px;">
+                {{ moon_phase.illumination_pct }}% illuminated &middot; {{ moon_phase.name }}
             </div>
         </div>
 
