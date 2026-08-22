@@ -240,10 +240,12 @@ h2 {
             <canvas id="windChart"></canvas>
         </div>
 
-        <div class="chart-card">
-            <h3>Solar Radiation</h3>
-            <div class="current-val">{{ solar[-1] if solar else '--' }} W/m²</div>
-            <canvas id="solarChart"></canvas>
+        <div class="chart-card" style="background:#0d1b2a;">
+            <h3 style="color:#e8e8e8;">Phase of the Moon</h3>
+            <div id="moonDial"></div>
+            <div style="color:#7fd8ff;font-size:0.8rem;margin-top:8px;">
+                {{ moon_phase.illumination_pct }}% illuminated &middot; {{ moon_phase.name }}
+            </div>
         </div>
 
         <div class="chart-card">
@@ -317,9 +319,6 @@ h2 {
             { label: 'Gust (mph)', data: {{ windgusts|tojson }}, borderColor: '#e74c3c', fill: false }
         ] }, options: sharedOptions
     });
-    new Chart(document.getElementById('solarChart'), {
-        type: 'line', data: { labels: labels, datasets: [{ label: 'W/m²', data: {{ solar|tojson }}, borderColor: '#f39c12', fill: false }] }, options: sharedOptions
-    });
     new Chart(document.getElementById('dailyrainChart'), {
         type: 'line', data: { labels: labels, datasets: [{ label: 'in', data: {{ dailyrains|tojson }}, borderColor: '#1abc9c', fill: true, backgroundColor: 'rgba(26,188,156,0.1)' }] }, options: sharedOptions
     });
@@ -352,6 +351,29 @@ h2 {
             <circle cx="${cx}" cy="${cy}" r="3" fill="#e8e8e8"/>
         </svg>`;
         document.getElementById('sunDial').innerHTML = svg;
+    })();
+
+    (function() {
+        const cx = 90, cy = 90, r = 75;
+        const illumFraction = {{ moon_phase.illumination_pct }} / 100;
+        const waxing = {{ 'true' if moon_phase.waxing else 'false' }};
+
+        // Terminator ellipse's horizontal radius shrinks to 0 at the quarter
+        // moons (a straight half-lit line) and grows to r at new/full (where it
+        // coincides with the disc's own edge).
+        const rx = r * Math.abs(1 - 2 * illumFraction);
+        const top = `${cx},${cy - r}`;
+        const bottom = `${cx},${cy + r}`;
+        const outerSweep = waxing ? 1 : 0;
+        const terminatorSweep = illumFraction < 0.5 ? (waxing ? 0 : 1) : (waxing ? 1 : 0);
+        const litPath = `M ${top} A ${r} ${r} 0 0 ${outerSweep} ${bottom} A ${rx} ${r} 0 0 ${terminatorSweep} ${top} Z`;
+
+        const svg = `
+        <svg viewBox="0 0 180 180" width="180" height="180" style="margin:0 auto;display:block;">
+            <circle cx="${cx}" cy="${cy}" r="${r}" fill="#16233a" stroke="#274b6d" stroke-width="2"/>
+            <path d="${litPath}" fill="#e8e8e8"/>
+        </svg>`;
+        document.getElementById('moonDial').innerHTML = svg;
     })();
 
     const birdLabels = [{% for r in chart %}'{{ r[0] }}',{% endfor %}];
