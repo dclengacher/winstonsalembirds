@@ -18,6 +18,7 @@
       "description": "How the Winston-Salem Bird Station was built: the Raspberry Pi hardware, BirdNET-Pi setup, and the story behind this acoustic bird monitoring project."
     }
     </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
 /* Shared site styles — single source of truth for typography + nav across all pages */
 
@@ -113,6 +114,12 @@ h2 {
         .story-text { padding: 20px 25px; }
         .story-text h2 { color: #2c3e50; margin-top: 0; }
         .story-text p { line-height: 1.6; margin-bottom: 0; }
+
+        /* This page's header is deliberately more compact on phones than the shared
+           1.25rem mobile default. */
+        @media (max-width: 600px) {
+            h1 { font-size: 16px; }
+        }
     </style>
 </head>
 <body>

@@ -18,6 +18,7 @@
       "description": "Complete list of all bird species detected at the Winston-Salem Bird Station acoustic monitoring site, powered by BirdNET-Pi."
     }
     </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
 /* Shared site styles — single source of truth for typography + nav across all pages */
 
@@ -111,6 +112,12 @@ h2 {
         th { background-color: #f8f9fa; position: sticky; top: 0; }
         .table-scroll { max-height: 700px; overflow-y: auto; }
         a.back { display: inline-block; margin-bottom: 15px; color: #0066cc; text-decoration: none; }
+
+        /* This page's header is deliberately more compact on phones than the shared
+           1.25rem mobile default. */
+        @media (max-width: 600px) {
+            h1 { font-size: 16px; }
+        }
     </style>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-2V6321XXM0"></script>
