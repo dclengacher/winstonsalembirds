@@ -19,6 +19,7 @@
       "description": "Live acoustic bird detection station in Winston-Salem, NC, using BirdNET-Pi to identify local bird species in real time by sound."
     }
     </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
 /* Shared site styles — single source of truth for typography + nav across all pages */
 
@@ -123,6 +124,21 @@ h2 {
         canvas { width: 100% !important; height: 200px !important; }
         .full-width-chart { grid-column: 1 / -1; }
         .full-width-chart canvas { height: 280px !important; }
+
+        /* This page's header is deliberately more compact on phones than the shared
+           1.25rem mobile default, and .row-top's fixed min-widths (320px + 600px)
+           would force horizontal overflow at phone widths once the viewport meta
+           tag makes the media query below actually apply. */
+        @media (max-width: 600px) {
+            h1 { font-size: 16px; }
+            .row-top { flex-direction: column; align-items: stretch; }
+            .live-cam { min-width: 0; width: 100%; }
+            /* min-width:0 alone isn't enough here: the detections table's fixed-width
+               audio control keeps forcing this box wide even when stretched, so it
+               needs an explicit width plus its own scroll container rather than
+               being left to blow out the page horizontally. */
+            .table-section { min-width: 0; width: 100%; box-sizing: border-box; overflow-x: auto; }
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
