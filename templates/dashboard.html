@@ -139,10 +139,7 @@ h2 {
 
 <div class="container">
     <div style="text-align:center;margin-bottom:15px;">
-        <h1 style="margin:0;color:#2c3e50;">Winston-Salem Bird Station</h1>
-        <p style="margin:5px 0 0;color:#888;font-size:0.85rem;">{{ page_generated }}</p>
-        <p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Raspberry Pi 4 · Ecowitt WittBoy 7-in-1 Weather Station · Cornell Lab BirdNET-Pi Acoustic Recognition</p>
-        <p style="margin:5px 0 0;color:#999;font-size:0.8rem;">Questions or feedback: <a href="mailto:winstonsalemanalytics@gmail.com" style="color:#0066cc;text-decoration:none;">winstonsalemanalytics@gmail.com</a></p>
+        {% include "partials/header.html" %}
     <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:20px;">
     {% if early_bird %}
     <div style="background:linear-gradient(135deg,#fff9db,#ffe58a);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:8px 14px;margin:0;max-width:480px;white-space:nowrap;display:flex;align-items:center;gap:10px;justify-content:center;">

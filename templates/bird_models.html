@@ -108,9 +108,8 @@ h2 {
 </head>
 <body>
 <div class="container">
-    <div style="text-align:center;">
-        <h1 style="margin:0;color:#2c3e50;">Bird Models</h1>
-        <p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Model-estimated vocal activity by hour — not raw detection counts. Each curve adjusts for temperature, humidity, pressure, and rainfall, isolating the effect of time of day alone.</p>
+    <div style="text-align:center;margin-bottom:15px;">
+        {% include "partials/header.html" %}
     </div>
     <div class="nav-bar">
         <a href="/" class="nav-link">Dashboard</a>
@@ -119,6 +118,10 @@ h2 {
         <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
         <a href="/history" class="nav-link">Project History</a>
         <a href="/analytics" class="nav-link">Analytics</a>
+    </div>
+    <div style="text-align:center;">
+        <h1 style="margin:0;color:#2c3e50;">Bird Models</h1>
+        <p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Model-estimated vocal activity by hour — not raw detection counts. Each curve adjusts for temperature, humidity, pressure, and rainfall, isolating the effect of time of day alone.</p>
     </div>
     <div class="card">
         {% if clock_data %}
