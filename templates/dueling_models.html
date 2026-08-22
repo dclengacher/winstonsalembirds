@@ -118,9 +118,8 @@ h2 {
 </head>
 <body>
 <div class="container">
-    <div style="text-align:center;">
-        <h1 style="margin:0;color:#2c3e50;">Dueling Models</h1>
-        <p style="margin:5px 0 0;color:#666;font-size:0.85rem;">Two competing statistical models, retrained nightly, racing to see which one better predicts bird activity.</p>
+    <div style="text-align:center;margin-bottom:15px;">
+        {% include "partials/header.html" %}
     </div>
     <div class="nav-bar">
         <a href="/" class="nav-link">Dashboard</a>
@@ -129,6 +128,10 @@ h2 {
         <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
         <a href="/history" class="nav-link">Project History</a>
         <a href="/analytics" class="nav-link">Analytics</a>
+    </div>
+    <div style="text-align:center;">
+        <h1 style="margin:0;color:#2c3e50;">Dueling Models</h1>
+        <p style="margin:5px 0 0;color:#666;font-size:0.85rem;">Two competing statistical models, retrained nightly, racing to see which one better predicts bird activity.</p>
     </div>
     <div class="card">
         <h2 style="margin-top:0;">Two Ways of Modeling "When Do Birds Sing?"</h2>

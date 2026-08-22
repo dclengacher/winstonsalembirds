@@ -105,6 +105,9 @@ threading.Thread(target=run_camera_loop, daemon=True).start()
 
 app = Flask(__name__, template_folder="/home/david/birdnet/templates", static_folder="/home/david/birdnet/static")
 
+def page_generated_now():
+    return datetime.now().strftime("%A, %B %d, %Y — %I:%M %p")
+
 @app.route("/data/report/", methods=["POST"])
 def wittboy_receive():
     try:
@@ -166,7 +169,7 @@ def dashboard():
 
     image_version = int(os.path.getmtime(IMAGE_PATH)) if os.path.exists(IMAGE_PATH) else int(time.time())
     current_image = f"live.jpg?v={image_version}"
-    page_generated = datetime.now().strftime("%A, %B %d, %Y — %I:%M %p")
+    page_generated = page_generated_now()
 
     conn2 = sqlite3.connect(DB_FILE)
     early_bird_row = conn2.execute("SELECT Com_Name, Sci_Name, substr(Time,1,5) FROM detections WHERE Date = date('now','localtime') ORDER BY Time ASC LIMIT 1").fetchone()
@@ -197,13 +200,13 @@ def alltime():
         FROM detections_alltime GROUP BY Com_Name ORDER BY Total_Count DESC LIMIT 100
     """).fetchall()
     conn.close()
-    resp = make_response(render_template("alltime.html", birds=birds))
+    resp = make_response(render_template("alltime.html", birds=birds, page_generated=page_generated_now()))
     resp.headers["Cache-Control"] = "no-store, must-revalidate"
     return resp
 
 @app.route("/history")
 def history():
-    resp = make_response(render_template("history.html"))
+    resp = make_response(render_template("history.html", page_generated=page_generated_now()))
     resp.headers["Cache-Control"] = "no-store, must-revalidate"
     return resp
 
@@ -564,7 +567,7 @@ def analytics():
     mlops_data = load_mlops_data()
     corr_data = get_wittboy_correlation()
 
-    resp = make_response(render_template("analytics.html", mlops=mlops_data, corr=corr_data))
+    resp = make_response(render_template("analytics.html", mlops=mlops_data, corr=corr_data, page_generated=page_generated_now()))
     resp.headers["Cache-Control"] = "no-store, must-revalidate"
     return resp
 
@@ -572,16 +575,16 @@ def analytics():
 @app.route("/bird-models")
 def bird_models():
     clock_data = get_bird_clock_data()
-    return render_template("bird_models.html", clock_data=clock_data)
+    return render_template("bird_models.html", clock_data=clock_data, page_generated=page_generated_now())
 @app.route("/dueling-models")
 def dueling_models():
     duel_data = get_dueling_data()
-    return render_template("dueling_models.html", duel_data=duel_data)
+    return render_template("dueling_models.html", duel_data=duel_data, page_generated=page_generated_now())
 
 @app.route("/seasonal-trends")
 def seasonal_trends():
     trend_data = get_seasonal_trend_data()
-    return render_template("seasonal_trends.html", trend_data=trend_data)
+    return render_template("seasonal_trends.html", trend_data=trend_data, page_generated=page_generated_now())
 
 @app.route("/sitemap.xml")
 def sitemap():
