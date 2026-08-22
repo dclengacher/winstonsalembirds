@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import sqlite3
 import subprocess
 import threading
@@ -27,6 +27,40 @@ def get_sun_times():
         "sunrise_pct": (s["sunrise"].hour * 60 + s["sunrise"].minute) / 1440 * 100,
         "sunset_pct": (s["sunset"].hour * 60 + s["sunset"].minute) / 1440 * 100,
         "now_pct": (datetime.now(tz).hour * 60 + datetime.now(tz).minute) / 1440 * 100,
+    }
+
+# Synodic-month approximation: days since a known new moon, mod the moon's
+# ~29.53-day cycle. No ephemeris/API needed -- accurate to well under a day,
+# plenty for a "what does the moon look like tonight" display.
+def get_moon_phase():
+    import math
+    synodic_month = 29.530588861
+    known_new_moon = datetime(2000, 1, 6, 18, 14, tzinfo=timezone.utc)
+    days_since = (datetime.now(timezone.utc) - known_new_moon).total_seconds() / 86400
+    phase = (days_since % synodic_month) / synodic_month
+    illumination = (1 - math.cos(2 * math.pi * phase)) / 2
+
+    if phase < 0.03 or phase > 0.97:
+        name = "New Moon"
+    elif phase < 0.22:
+        name = "Waxing Crescent"
+    elif phase < 0.28:
+        name = "First Quarter"
+    elif phase < 0.47:
+        name = "Waxing Gibbous"
+    elif phase < 0.53:
+        name = "Full Moon"
+    elif phase < 0.72:
+        name = "Waning Gibbous"
+    elif phase < 0.78:
+        name = "Last Quarter"
+    else:
+        name = "Waning Crescent"
+
+    return {
+        "illumination_pct": round(illumination * 100),
+        "name": name,
+        "waxing": phase < 0.5,
     }
 EBIRD_LAT = 36.0999
 EBIRD_LNG = -80.2442
@@ -150,7 +184,7 @@ def dashboard():
     weather_data = conn.execute("""
         SELECT
             substr(timestamp,1,14) || printf('%02d', (CAST(substr(timestamp,15,2) AS INTEGER)/10)*10) || ':00' AS bucket,
-            AVG(tempf), AVG(humidity), AVG(baromrelin), AVG(windspeedmph), AVG(windgustmph), AVG(solarradiation), AVG(dailyrain)
+            AVG(tempf), AVG(humidity), AVG(baromrelin), AVG(windspeedmph), AVG(windgustmph), AVG(dailyrain)
         FROM wittboy
         WHERE timestamp >= datetime('now', 'localtime', '-24 hours')
         GROUP BY bucket
@@ -164,8 +198,7 @@ def dashboard():
     pressures = [round(row[3],2) if row[3] is not None else None for row in weather_data]
     windspeeds = [round(row[4],1) if row[4] is not None else None for row in weather_data]
     windgusts = [round(row[5],1) if row[5] is not None else None for row in weather_data]
-    solar = [round(row[6],1) if row[6] is not None else None for row in weather_data]
-    dailyrains = [round(row[7],2) if row[7] is not None else None for row in weather_data]
+    dailyrains = [round(row[6],2) if row[6] is not None else None for row in weather_data]
 
     image_version = int(os.path.getmtime(IMAGE_PATH)) if os.path.exists(IMAGE_PATH) else int(time.time())
     current_image = f"live.jpg?v={image_version}"
@@ -180,14 +213,16 @@ def dashboard():
     conn3.close()
     night_owl = {"com_name": night_owl_row[0], "sci_name": night_owl_row[1], "time": night_owl_row[2]} if night_owl_row else None
     sun_times = get_sun_times()
+    moon_phase = get_moon_phase()
 
     resp = make_response(render_template(
         "dashboard.html", birds=birds, chart=chart, weather_labels=weather_labels,
         temps=temps, humidities=humidities, pressures=pressures,
         windspeeds=windspeeds, windgusts=windgusts,
-        solar=solar, dailyrains=dailyrains,
+        dailyrains=dailyrains,
         current_image=current_image, page_generated=page_generated,
-        ebird_sightings=ebird_sightings, sun_times=sun_times, early_bird=early_bird, night_owl=night_owl
+        ebird_sightings=ebird_sightings, sun_times=sun_times, moon_phase=moon_phase,
+        early_bird=early_bird, night_owl=night_owl
     ))
     resp.headers["Cache-Control"] = "no-store, must-revalidate"
     return resp
