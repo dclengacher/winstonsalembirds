@@ -108,7 +108,7 @@ PLANES_DB_FILE = "/home/david/birdnet/data/planes.db"
 PLANES_POLL_INTERVAL_SECONDS = 20
 RECENT_DETECTIONS_WINDOW_MINUTES = 30  # /api/planes-live history table: a time window, not a row count, so a busy burst can't truncate it to a few minutes
 NO_CALLSIGN_LABEL = "(no callsign)"  # shown instead of a raw ICAO hex when flight/registration are both blank -- a bare hex looks enough like a real callsign to mislead
-DISPLAY_RANGE_MI = 5.0  # live radar/table are narrowed to this 3D slant range; the poll loop below still logs every aircraft regardless of distance
+DISPLAY_RANGE_MI = 7.0  # live radar/table are narrowed to this 3D slant range; the poll loop below still logs every aircraft regardless of distance
 
 def _load_aircraft_types():
     try:
@@ -686,26 +686,43 @@ def _within_display_range(distance_mi):
 
 def _live_aircraft_entry(plane):
     """Minimal per-aircraft radar entry: hex (trail key), callsign (blip
-    label), and position (distance_mi/r_dir_deg) for plotting -- all the
-    radar actually plots. Resolved type/registration/airline info used to
-    be computed here too, but that only ever fed the "Last Plane Detected"
-    spotlight card (removed: with multiple simultaneous aircraft, re-picking
-    whichever one's packet arrived most recently every 5s poll just looked
-    like flicker, and it was redundant with the radar/table anyway). Re-add
-    via _aircraft_types/_classify_flight if a future radar feature (e.g. a
-    blip tooltip) needs it.
+    label), and position (ground_distance_mi/r_dir_deg) for plotting -- all
+    the radar actually plots. Resolved type/registration/airline info used
+    to be computed here too, but that only ever fed the "Last Plane
+    Detected" spotlight card (removed: with multiple simultaneous aircraft,
+    re-picking whichever one's packet arrived most recently every 5s poll
+    just looked like flicker, and it was redundant with the radar/table
+    anyway). Re-add via _aircraft_types/_classify_flight if a future radar
+    feature (e.g. a blip tooltip) needs it.
+
+    Two distances are returned and they are NOT interchangeable:
+    - distance_mi is the true 3D slant range (ground + altitude combined,
+      via _slant_range_mi) -- this is what _within_display_range() filters
+      on, and it's the figure the Recent Detections table shows.
+    - ground_distance_mi is the 2D ground-track distance only (r_dst
+      converted to statute miles, no altitude component) -- this is what
+      the radar uses to place the blip. A standard radar plots ground
+      position, not slant range: a plane directly overhead at cruise
+      altitude has ~0 ground distance and belongs near the center of the
+      scope, even though its slant range (mostly altitude) can be several
+      miles. Plotting by slant range would push that overhead plane out
+      near the edge, which reads as "far away" when it's actually right
+      above the station.
 
     callsign falls back to NO_CALLSIGN_LABEL rather than the raw hex when
     flight is blank -- a bare hex like "A3EDAA" is shaped enough like a
     real callsign to mislead."""
     hex_code = plane.get("hex")
     flight = (plane.get("flight") or "").strip() or None
-    distance_mi = _slant_range_mi(plane.get("r_dst"), plane.get("alt_baro"))
+    r_dst = plane.get("r_dst")
+    distance_mi = _slant_range_mi(r_dst, plane.get("alt_baro"))
+    ground_distance_mi = r_dst * NM_TO_MI if r_dst is not None else None
     r_dir = plane.get("r_dir")
     return {
         "hex": hex_code,
         "callsign": flight.upper() if flight else NO_CALLSIGN_LABEL,
         "distance_mi": round(distance_mi, 1) if distance_mi is not None else None,
+        "ground_distance_mi": round(ground_distance_mi, 1) if ground_distance_mi is not None else None,
         "r_dir_deg": round(r_dir) if r_dir is not None else None,
     }
 
