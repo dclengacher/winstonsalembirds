@@ -51,6 +51,7 @@ OUTPUT_PATH = "/home/david/birdnet/data/aircraft_types.json"
 HEX_CHARS = set("0123456789abcdefABCDEF")
 FULL_HEX_LEN = 6
 GZIP_MAGIC = b"\x1f\x8b"
+SKIP_SAMPLE_LIMIT = 10  # how many example skipped keys to print per category
 
 
 def _read_shard_json(path):
@@ -125,7 +126,10 @@ def merge(tar1090_db_path=TAR1090_DB_PATH):
     print(f"Found {len(shards)} shard file(s) under {tar1090_db_path}")
 
     merged = {}
-    skipped_keys = 0
+    skipped_unresolvable_prefix = 0
+    skipped_malformed_value = 0
+    unresolvable_samples = []
+    malformed_samples = []
     failed_shards = 0
     skipped_shards = 0
     for shard_path in shards:
@@ -151,10 +155,14 @@ def merge(tar1090_db_path=TAR1090_DB_PATH):
         for key, value in data.items():
             full_hex = _resolve_hex(prefix, key)
             if full_hex is None:
-                skipped_keys += 1
+                skipped_unresolvable_prefix += 1
+                if len(unresolvable_samples) < SKIP_SAMPLE_LIMIT:
+                    unresolvable_samples.append((shard_path, prefix, key, value))
                 continue
             if not isinstance(value, list) or len(value) < 2:
-                skipped_keys += 1
+                skipped_malformed_value += 1
+                if len(malformed_samples) < SKIP_SAMPLE_LIMIT:
+                    malformed_samples.append((shard_path, prefix, key, value))
                 continue
             registration = value[0] or None
             type_designator = value[1] or None
@@ -170,8 +178,16 @@ def merge(tar1090_db_path=TAR1090_DB_PATH):
         json.dump(merged, f)
 
     print(f"Merged {len(merged)} aircraft type entries -> {OUTPUT_PATH}")
-    if skipped_keys:
-        print(f"  ({skipped_keys} keys skipped -- unresolvable prefix or malformed value)")
+    if skipped_unresolvable_prefix:
+        print(f"  ({skipped_unresolvable_prefix} keys skipped -- unresolvable hex prefix)")
+        print(f"  sample unresolvable-prefix keys (up to {SKIP_SAMPLE_LIMIT}):")
+        for shard_path, prefix, key, value in unresolvable_samples:
+            print(f"    shard={shard_path} prefix={prefix!r} key={key!r} value={value!r}")
+    if skipped_malformed_value:
+        print(f"  ({skipped_malformed_value} keys skipped -- malformed value)")
+        print(f"  sample malformed-value entries (up to {SKIP_SAMPLE_LIMIT}):")
+        for shard_path, prefix, key, value in malformed_samples:
+            print(f"    shard={shard_path} prefix={prefix!r} key={key!r} value={value!r}")
     if skipped_shards:
         print(f"  ({skipped_shards} non-shard file(s) skipped -- not a hex-keyed JSON object)")
     if failed_shards:
