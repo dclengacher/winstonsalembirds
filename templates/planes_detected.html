@@ -173,7 +173,10 @@ h2 {
     // timer and touches only elements inside this template. No other page's
     // refresh behavior (or lack of it) is affected by this block.
     const POLL_INTERVAL_MS = 5000;
-    const MAX_RANGE_NM = 40;
+    // Must match DISPLAY_RANGE_MI in app/main.py -- the backend already
+    // filters both `aircraft` and `recent` to this radius (true 3D slant
+    // range), this is just the radar's own plotting scale.
+    const MAX_RANGE_MI = 5;
     const TRAIL_MAX_POINTS = 6;
     const RADAR_VIEWBOX = 340;
     const cx = RADAR_VIEWBOX / 2, cy = RADAR_VIEWBOX / 2, r = RADAR_VIEWBOX / 2 - 30;
@@ -208,7 +211,7 @@ h2 {
         const tbody = document.getElementById('recentTableBody');
         if (!tbody) return;
         if (!recentState.length) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;">No detections logged yet today.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:20px 10px;">Nothing within 5 miles in the last 30 minutes.<br>Most air traffic cruises well outside that range — this is expected, not broken.</td></tr>';
             return;
         }
         tbody.innerHTML = recentState.map(function(row) {
@@ -218,7 +221,7 @@ h2 {
                 '<td>' + escapeHtml(row.is_commercial ? (row.airline_name || 'Commercial') : 'General Aviation') + '</td>' +
                 '<td>' + escapeHtml(row.type_name) + '</td>' +
                 '<td>' + (row.altitude_ft !== null && row.altitude_ft !== undefined ? row.altitude_ft + ' ft' : '—') + '</td>' +
-                '<td>' + (row.r_dst_nm !== null && row.r_dst_nm !== undefined ? row.r_dst_nm + ' nm' : '—') + '</td>' +
+                '<td>' + (row.distance_mi !== null && row.distance_mi !== undefined ? row.distance_mi + ' mi' : '—') + '</td>' +
                 '<td>' + (row.ground_speed_kt !== null && row.ground_speed_kt !== undefined ? row.ground_speed_kt + ' kt' : '—') + '</td>' +
                 '</tr>';
         }).join('');
@@ -234,10 +237,10 @@ h2 {
     }
 
     function planeCanvasPos(p) {
-        if (p.r_dst_nm === null || p.r_dst_nm === undefined || p.r_dir_deg === null || p.r_dir_deg === undefined) {
+        if (p.distance_mi === null || p.distance_mi === undefined || p.r_dir_deg === null || p.r_dir_deg === undefined) {
             return null;
         }
-        const dist = Math.min(p.r_dst_nm / MAX_RANGE_NM, 1) * r;
+        const dist = Math.min(p.distance_mi / MAX_RANGE_MI, 1) * r;
         return polar(p.r_dir_deg, dist);
     }
 
@@ -267,13 +270,14 @@ h2 {
             return '<text x="' + p[0] + '" y="' + p[1] + '" font-size="16" fill="#7fd8ff" text-anchor="middle" dominant-baseline="middle">' + pair[1] + '</text>';
         }).join('');
 
-        // Range rings at 1/3 and 2/3 of MAX_RANGE_NM plus the outer edge,
-        // each labeled with its real nm value for a proper radar-scope feel.
+        // Range rings at 1/3 and 2/3 of MAX_RANGE_MI plus the outer edge
+        // (roughly 1.7, 3.3 and 5 miles), each labeled with its real mile
+        // value for a proper radar-scope feel.
         const rings = [r / 3, (2 * r) / 3, r].map(function(radius) {
-            const nm = Math.round(MAX_RANGE_NM * (radius / r));
+            const mi = (MAX_RANGE_MI * (radius / r)).toFixed(1);
             const labelPos = polar(135, radius);
             return '<circle cx="' + cx + '" cy="' + cy + '" r="' + radius + '" fill="none" stroke="#274b6d" stroke-width="1"/>' +
-                '<text x="' + labelPos[0] + '" y="' + labelPos[1] + '" font-size="10" fill="#3d6a8f" text-anchor="middle">' + nm + 'nm</text>';
+                '<text x="' + labelPos[0] + '" y="' + labelPos[1] + '" font-size="10" fill="#3d6a8f" text-anchor="middle">' + mi + 'mi</text>';
         }).join('');
 
         // Rotating sweep wedge -- a fading gradient slice spun continuously
@@ -301,7 +305,9 @@ h2 {
         const blips = planesState.map(function(p) {
             const pos = planeCanvasPos(p);
             if (!pos) return '';
-            const label = escapeHtml(p.callsign || p.hex || '');
+            // Backend already guarantees a non-empty, non-hex label --
+            // flight callsign or the "(no callsign)" placeholder.
+            const label = escapeHtml(p.callsign);
             return '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="5" fill="#7fd8ff" stroke="#e8e8e8" stroke-width="1.5">' +
                 '<animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite"/>' +
                 '</circle>' +
@@ -319,8 +325,8 @@ h2 {
         const caption = document.getElementById('radarCaption');
         if (caption) {
             caption.textContent = planesState.length
-                ? planesState.length + ' aircraft in range'
-                : 'No aircraft in range';
+                ? planesState.length + ' aircraft within 5 miles'
+                : 'Nothing within 5 miles right now';
         }
     }
 
