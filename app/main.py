@@ -107,12 +107,6 @@ PLANES_DB_FILE = "/home/david/birdnet/data/planes.db"
 PLANES_POLL_INTERVAL_SECONDS = 20
 RECENT_DETECTIONS_LIMIT = 15  # rows returned for the /api/planes-live history table
 
-COMPASS_POINTS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-                   "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
-
-def _compass_bearing(deg):
-    return COMPASS_POINTS[int((deg / 22.5) + 0.5) % 16]
-
 def _load_aircraft_types():
     try:
         with open(AIRCRAFT_TYPES_PATH) as f:
@@ -640,56 +634,25 @@ def get_seasonal_trend_data():
     }
 
 
-def _format_ago(seconds):
-    seconds = max(0, seconds)
-    if seconds < 60:
-        return f"{int(seconds)}s ago"
-    elif seconds < 3600:
-        return f"{int(seconds // 60)}m ago"
-    else:
-        return f"{int(seconds // 3600)}h {int((seconds % 3600) // 60)}m ago"
-
-def _resolve_aircraft_info(hex_code, flight, fallback_registration=None, fallback_type=None):
-    lookup = _aircraft_types.get(hex_code, {}) if hex_code else {}
-    registration = lookup.get("registration") or fallback_registration
-    type_designator = lookup.get("type_designator") or fallback_type
-    description = lookup.get("description")
-    is_commercial, airline_name = _classify_flight(flight)
-    return {
-        "registration": registration or "—",
-        "type_code": type_designator,
-        "type_name": description or type_designator or "Unknown aircraft",
-        "is_commercial": is_commercial,
-        "airline_name": airline_name,
-    }
-
 def _live_aircraft_entry(plane):
-    """Build the common resolved-aircraft dict (registration/type/airline plus
-    position, speed and a raw last-seen epoch) from one entry of the live
-    aircraft.json snapshot. Shared by get_last_plane_live()'s live-snapshot
-    branch and get_planes_live_payload() so both use identical resolution
-    logic. last_seen_epoch is a raw epoch, not a pre-formatted string, so the
-    frontend can recompute "Xs ago" locally every second without polling."""
+    """Minimal per-aircraft radar entry: hex (trail key / label fallback),
+    callsign (blip label), and position (r_dst_nm/r_dir_deg) for plotting --
+    all the radar actually plots. Resolved type/registration/airline info
+    used to be computed here too, but that only ever fed the "Last Plane
+    Detected" spotlight card (removed: with multiple simultaneous aircraft,
+    re-picking whichever one's packet arrived most recently every 5s poll
+    just looked like flicker, and it was redundant with the radar/table
+    anyway). Re-add via _aircraft_types/_classify_flight if a future radar
+    feature (e.g. a blip tooltip) needs it."""
     hex_code = plane.get("hex")
     flight = (plane.get("flight") or "").strip() or None
-    info = _resolve_aircraft_info(hex_code, flight, plane.get("r"), plane.get("t"))
     r_dst = plane.get("r_dst")
     r_dir = plane.get("r_dir")
-    gs = plane.get("gs")
-    track = plane.get("track")
-    seen = plane.get("seen") or 0
     return {
-        **info,
         "hex": hex_code,
-        "callsign": (flight or info["registration"] or hex_code or "").strip().upper(),
-        "altitude_ft": plane.get("alt_baro"),
-        "ground_speed_kt": round(gs) if gs is not None else None,
-        "track_deg": round(track) if track is not None else None,
+        "callsign": (flight or hex_code or "").strip().upper(),
         "r_dst_nm": round(r_dst, 1) if r_dst is not None else None,
         "r_dir_deg": round(r_dir) if r_dir is not None else None,
-        "r_dir_compass": _compass_bearing(r_dir) if r_dir is not None else None,
-        "seen_ago": _format_ago(seen),
-        "last_seen_epoch": int(time.time() - seen),
     }
 
 def get_live_aircraft_snapshot():
@@ -707,73 +670,8 @@ def get_live_aircraft_snapshot():
     entries.sort(key=lambda e: e["r_dst_nm"] if e["r_dst_nm"] is not None else float("inf"))
     return entries
 
-def get_last_plane_live():
-    """
-    "Last Plane Detected" still always shows something -- same no-idle-state
-    contract as before -- but with real data there are now two tiers
-    instead of one guaranteed-non-empty placeholder:
-      1. The live aircraft.json snapshot, if it exists and lists at least
-         one aircraft -- freshest possible data (live position/alt/speed).
-      2. Otherwise, the most recent row already logged in plane_detections
-         -- covers the receiver being between contacts, or aircraft.json
-         being briefly unreadable.
-    Returns None only if NEITHER source has anything yet (e.g. right after
-    a fresh deploy, before the first plane has ever been logged) -- the
-    template handles that minimally, since it's a real possibility now
-    that data is live rather than an always-non-empty placeholder.
-    """
-    live = get_live_aircraft_snapshot()
-    if live:
-        # Most recently heard-from aircraft, not nearest -- smallest "seen"
-        # age is equivalent to the largest last_seen_epoch.
-        return max(live, key=lambda e: e["last_seen_epoch"])
-
+def get_hourly_plane_counts():
     conn = sqlite3.connect(PLANES_DB_FILE)
-    # Order by id, not detected_at: detected_at only has 1-second resolution,
-    # so multiple detections logged in the same poll cycle (or the same
-    # second) tie on timestamp -- id is the strictly-increasing true
-    # insertion order and breaks that tie correctly.
-    row = conn.execute("""
-        SELECT detected_at, hex, flight, registration, type_designator, description,
-               is_commercial, airline_name, r_dst, r_dir, alt_baro, gs
-        FROM plane_detections ORDER BY id DESC LIMIT 1
-    """).fetchone()
-    conn.close()
-    if not row:
-        return None
-
-    (detected_at, hex_code, flight, registration, type_designator, description,
-     is_commercial, airline_name, r_dst, r_dir, alt_baro, gs) = row
-    try:
-        detected_dt = datetime.strptime(detected_at, "%Y-%m-%d %H:%M:%S")
-        ago_seconds = (datetime.now() - detected_dt).total_seconds()
-        detected_epoch = int(detected_dt.timestamp())
-    except ValueError:
-        ago_seconds = 0
-        detected_epoch = int(time.time())
-    return {
-        "hex": hex_code,
-        "callsign": (flight or registration or hex_code or "").strip().upper(),
-        "registration": registration or "—",
-        "type_code": type_designator,
-        "type_name": description or type_designator or "Unknown aircraft",
-        "is_commercial": bool(is_commercial),
-        "airline_name": airline_name,
-        "altitude_ft": alt_baro,
-        "ground_speed_kt": round(gs) if gs is not None else None,
-        "track_deg": None,  # not stored on the historical log row
-        "r_dst_nm": round(r_dst, 1) if r_dst is not None else None,
-        "r_dir_deg": round(r_dir) if r_dir is not None else None,
-        "r_dir_compass": _compass_bearing(r_dir) if r_dir is not None else None,
-        "seen_ago": _format_ago(ago_seconds),
-        "last_seen_epoch": detected_epoch,
-    }
-
-def get_daily_plane_stats_live():
-    conn = sqlite3.connect(PLANES_DB_FILE)
-    total_today = conn.execute(
-        "SELECT COUNT(*) FROM plane_detections WHERE date(detected_at) = date('now','localtime')"
-    ).fetchone()[0]
     chart = conn.execute("""
         SELECT strftime('%Y-%m-%d %H:00', detected_at) AS bucket, COUNT(*)
         FROM plane_detections
@@ -783,20 +681,19 @@ def get_daily_plane_stats_live():
     """).fetchall()
     conn.close()
     return {
-        "total_today": total_today,
         "hour_labels": [row[0][-5:] for row in chart],
         "hourly_counts": [row[1] for row in chart],
     }
 
 def get_planes_live_payload():
     """Single-response payload for the /api/planes-live poll: every aircraft
-    currently visible (for the radar), the day's running total and a short
-    history of the most recent logged rows (for the recent-detections
-    table), and hourly counts (for the trend chart) -- everything the
-    frontend's 5-second refresh needs to update the whole page in one
-    round trip."""
+    currently visible (for the radar), a short history of the most recent
+    logged rows (for the recent-detections table), and hourly counts (for
+    the trend chart) -- everything the frontend's 5-second refresh needs to
+    update the whole page in one round trip. No day-total figure here --
+    the "Planes Logged Today" stat card that used it was removed."""
     aircraft = get_live_aircraft_snapshot()
-    daily = get_daily_plane_stats_live()
+    hourly = get_hourly_plane_counts()
 
     conn = sqlite3.connect(PLANES_DB_FILE)
     recent_rows = conn.execute("""
@@ -826,10 +723,9 @@ def get_planes_live_payload():
 
     return {
         "aircraft": aircraft,
-        "daily_total": daily["total_today"],
         "recent": recent,
-        "hour_labels": daily["hour_labels"],
-        "hourly_counts": daily["hourly_counts"],
+        "hour_labels": hourly["hour_labels"],
+        "hourly_counts": hourly["hourly_counts"],
     }
 
 
@@ -934,10 +830,8 @@ def seasonal_trends():
 
 @app.route("/planes-detected")
 def planes_detected():
-    last_plane = get_last_plane_live()
-    daily = get_daily_plane_stats_live()
     live = get_planes_live_payload()
-    return render_template("planes_detected.html", last_plane=last_plane, daily=daily, live=live, page_generated=page_generated_now())
+    return render_template("planes_detected.html", live=live, page_generated=page_generated_now())
 
 @app.route("/api/planes-live")
 def api_planes_live():
