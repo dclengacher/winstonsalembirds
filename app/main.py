@@ -7,8 +7,12 @@ from datetime import datetime, timedelta, timezone
 import sqlite3
 import subprocess
 import threading
+import re
+import json as _json
 import requests
 from flask import Flask, render_template, make_response, request, Response
+
+from airline_codes import AIRLINE_CODES
 
 EBIRD_API_KEY = os.environ["EBIRD_API_KEY"]
 
@@ -96,6 +100,119 @@ def run_ebird_loop():
         time.sleep(3600)
 
 threading.Thread(target=run_ebird_loop, daemon=True).start()
+
+AIRCRAFT_JSON_PATH = "/run/readsb/aircraft.json"  # readsb/tar1090 live snapshot
+AIRCRAFT_TYPES_PATH = "/home/david/birdnet/data/aircraft_types.json"  # from scripts/build_aircraft_type_db.py
+PLANES_DB_FILE = "/home/david/birdnet/data/planes.db"
+PLANES_POLL_INTERVAL_SECONDS = 20
+
+COMPASS_POINTS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+                   "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+
+def _compass_bearing(deg):
+    return COMPASS_POINTS[int((deg / 22.5) + 0.5) % 16]
+
+def _load_aircraft_types():
+    try:
+        with open(AIRCRAFT_TYPES_PATH) as f:
+            return _json.load(f)
+    except (FileNotFoundError, _json.JSONDecodeError):
+        print(f"[WARN] {AIRCRAFT_TYPES_PATH} not found -- run scripts/build_aircraft_type_db.py on the Pi")
+        return {}
+
+_aircraft_types = _load_aircraft_types()
+
+def _init_planes_db():
+    os.makedirs(os.path.dirname(PLANES_DB_FILE), exist_ok=True)
+    conn = sqlite3.connect(PLANES_DB_FILE)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS plane_detections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            detected_at TEXT NOT NULL,
+            hex TEXT NOT NULL,
+            flight TEXT,
+            registration TEXT,
+            type_designator TEXT,
+            description TEXT,
+            category TEXT,
+            is_commercial INTEGER NOT NULL,
+            airline_name TEXT,
+            r_dst REAL,
+            r_dir REAL,
+            alt_baro INTEGER,
+            baro_rate INTEGER,
+            gs REAL,
+            rssi REAL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+_init_planes_db()
+
+def _classify_flight(flight):
+    # Commercial ICAO callsigns are a 3-letter operator code + flight number
+    # (e.g. "DAL1423"). General-aviation tail numbers ("N123AA") don't match
+    # that shape and fall through to (False, None) by default.
+    callsign = (flight or "").strip().upper()
+    m = re.match(r"^([A-Z]{3})\d", callsign)
+    if m and m.group(1) in AIRLINE_CODES:
+        return True, AIRLINE_CODES[m.group(1)]
+    return False, None
+
+_active_aircraft_hexes = set()
+
+def run_planes_poll_loop():
+    # Same shape as run_ebird_loop -- a daemon thread on its own poll
+    # interval, wrapped in try/except so one bad read doesn't kill it.
+    # Difference from eBird: this one writes to a database, so it needs to
+    # track what was already active last cycle to only log genuinely new
+    # detections rather than re-logging every still-visible aircraft.
+    global _active_aircraft_hexes
+    while True:
+        try:
+            with open(AIRCRAFT_JSON_PATH) as f:
+                snapshot = _json.load(f)
+            current = snapshot.get("aircraft", [])
+            current_hexes = {a["hex"] for a in current if a.get("hex")}
+            newly_seen = [a for a in current if a.get("hex") and a["hex"] not in _active_aircraft_hexes]
+
+            if newly_seen:
+                conn = sqlite3.connect(PLANES_DB_FILE)
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                for a in newly_seen:
+                    hex_code = a["hex"]
+                    flight = (a.get("flight") or "").strip() or None
+                    # Our merged tar1090-db lookup is authoritative when it
+                    # has the hex; readsb's own r/t fields (when present)
+                    # fill the gap otherwise.
+                    lookup = _aircraft_types.get(hex_code, {})
+                    registration = lookup.get("registration") or a.get("r")
+                    type_designator = lookup.get("type_designator") or a.get("t")
+                    description = lookup.get("description")
+                    is_commercial, airline_name = _classify_flight(flight)
+                    conn.execute(
+                        """INSERT INTO plane_detections
+                           (detected_at, hex, flight, registration, type_designator, description,
+                            category, is_commercial, airline_name, r_dst, r_dir, alt_baro, baro_rate, gs, rssi)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (now_str, hex_code, flight, registration, type_designator, description,
+                         a.get("category"), int(is_commercial), airline_name,
+                         a.get("r_dst"), a.get("r_dir"), a.get("alt_baro"),
+                         a.get("baro_rate"), a.get("gs"), a.get("rssi")),
+                    )
+                conn.commit()
+                conn.close()
+                print(f"[{time.strftime('%X')}] Planes poll -> {len(newly_seen)} newly detected ({len(current_hexes)} active)")
+
+            _active_aircraft_hexes = current_hexes
+        except FileNotFoundError:
+            print(f"[WARN] {AIRCRAFT_JSON_PATH} not found -- readsb/tar1090 not running or not wired up yet")
+        except Exception as e:
+            print(f"[ERROR] Planes poll error: {e}")
+        time.sleep(PLANES_POLL_INTERVAL_SECONDS)
+
+threading.Thread(target=run_planes_poll_loop, daemon=True).start()
 
 subprocess.run(['fuser', '-k', '5000/tcp'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(1)
@@ -522,97 +639,126 @@ def get_seasonal_trend_data():
     }
 
 
-AIRCRAFT_JSON_PATH = "/run/readsb/aircraft.json"  # readsb/tar1090 live snapshot -- see get_aircraft_snapshot()
-
-AIRCRAFT_TYPE_NAMES = {
-    "A319": "Airbus A319", "A320": "Airbus A320", "A321": "Airbus A321",
-    "B737": "Boeing 737-700", "B738": "Boeing 737-800", "B739": "Boeing 737-900",
-    "B39M": "Boeing 737 MAX 9", "B788": "Boeing 787-8", "B77W": "Boeing 777-300ER",
-    "E75L": "Embraer E175", "CRJ7": "Bombardier CRJ-700", "CRJ9": "Bombardier CRJ-900",
-    "C172": "Cessna 172", "PA28": "Piper PA-28", "SR22": "Cirrus SR22",
-}
-
-COMPASS_POINTS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-                   "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
-
-def _compass_bearing(deg):
-    return COMPASS_POINTS[int((deg / 22.5) + 0.5) % 16]
-
-def get_aircraft_snapshot():
-    """
-    Returns the aircraft currently visible to the receiver, in readsb's own
-    schema -- the same shape as the "aircraft" array in
-    /run/readsb/aircraft.json (hex, flight, r, t, alt_baro, alt_geom, gs,
-    track, baro_rate, squawk, category, lat, lon, seen, rssi).
-
-    No live feed is wired up yet, so this returns realistic placeholder
-    data in that exact shape. Swapping in the real feed later means
-    replacing this function's body with
-    json.load(open(AIRCRAFT_JSON_PATH))["aircraft"] -- everything
-    downstream already consumes this shape and doesn't change.
-    """
-    return [
-        {"hex": "a1b2c3", "flight": "AAL1423 ", "r": "N123AA", "t": "B738",
-         "alt_baro": 8500, "alt_geom": 8650, "gs": 245.3, "track": 214.6,
-         "baro_rate": -1280, "squawk": "4610", "category": "A3",
-         "lat": 36.132, "lon": -80.301, "seen": 4.2, "rssi": -21.4},
-        {"hex": "b4c5d6", "flight": "DAL2210 ", "r": "N882DL", "t": "B739",
-         "alt_baro": 34000, "alt_geom": 34200, "gs": 458.1, "track": 62.3,
-         "baro_rate": 0, "squawk": "3141", "category": "A3",
-         "lat": 36.281, "lon": -80.104, "seen": 18.7, "rssi": -28.9},
-        {"hex": "c7d8e9", "flight": None, "r": "N4471X", "t": "C172",
-         "alt_baro": 2500, "alt_geom": 2620, "gs": 98.4, "track": 178.2,
-         "baro_rate": -60, "squawk": "1200", "category": "A1",
-         "lat": 36.095, "lon": -80.256, "seen": 55.0, "rssi": -33.1},
-    ]
-
-def get_last_plane():
-    # Same "always show something" contract as the dashboard's birds table:
-    # the placeholder snapshot is never empty, and once the real feed is
-    # wired up, aircraft.json only lists aircraft currently in range, so
-    # there's always a most-recent one to show.
-    aircraft = get_aircraft_snapshot()
-    plane = min(aircraft, key=lambda a: a.get("seen", 9999))
-    seen = plane.get("seen", 0)
-    if seen < 60:
-        seen_ago = f"{int(seen)}s ago"
-    elif seen < 3600:
-        seen_ago = f"{int(seen // 60)}m ago"
+def _format_ago(seconds):
+    seconds = max(0, seconds)
+    if seconds < 60:
+        return f"{int(seconds)}s ago"
+    elif seconds < 3600:
+        return f"{int(seconds // 60)}m ago"
     else:
-        seen_ago = f"{int(seen // 3600)}h {int((seen % 3600) // 60)}m ago"
-    type_code = plane.get("t") or ""
-    heading = plane.get("track", 0)
-    callsign = (plane.get("flight") or plane.get("r") or plane.get("hex", "")).strip().upper()
+        return f"{int(seconds // 3600)}h {int((seconds % 3600) // 60)}m ago"
+
+def _resolve_aircraft_info(hex_code, flight, fallback_registration=None, fallback_type=None):
+    lookup = _aircraft_types.get(hex_code, {}) if hex_code else {}
+    registration = lookup.get("registration") or fallback_registration
+    type_designator = lookup.get("type_designator") or fallback_type
+    description = lookup.get("description")
+    is_commercial, airline_name = _classify_flight(flight)
     return {
-        "callsign": callsign,
-        "registration": plane.get("r", "—"),
-        "type_code": type_code,
-        "type_name": AIRCRAFT_TYPE_NAMES.get(type_code, type_code or "Unknown"),
-        "altitude_ft": plane.get("alt_baro"),
-        "heading_deg": round(heading),
-        "heading_compass": _compass_bearing(heading),
-        "ground_speed_kt": round(plane.get("gs", 0)),
-        "squawk": plane.get("squawk"),
-        "seen_ago": seen_ago,
+        "registration": registration or "—",
+        "type_code": type_designator,
+        "type_name": description or type_designator or "Unknown aircraft",
+        "is_commercial": is_commercial,
+        "airline_name": airline_name,
     }
 
-def get_daily_plane_stats():
+def get_last_plane_live():
     """
-    Aggregated per-day stats and an hourly trend for the last 24 hours.
-    aircraft.json itself only ever holds a live snapshot, not history --
-    once a background poller logs each newly-seen aircraft into a table
-    (mirroring how BirdNET-Pi's `detections` table works for birds), this
-    becomes a real SQL query. For now it's realistic placeholder data in
-    the shape that query would return.
+    "Last Plane Detected" still always shows something -- same no-idle-state
+    contract as before -- but with real data there are now two tiers
+    instead of one guaranteed-non-empty placeholder:
+      1. The live aircraft.json snapshot, if it exists and lists at least
+         one aircraft -- freshest possible data (live position/alt/speed).
+      2. Otherwise, the most recent row already logged in plane_detections
+         -- covers the receiver being between contacts, or aircraft.json
+         being briefly unreadable.
+    Returns None only if NEITHER source has anything yet (e.g. right after
+    a fresh deploy, before the first plane has ever been logged) -- the
+    template handles that minimally, since it's a real possibility now
+    that data is live rather than an always-non-empty placeholder.
     """
-    hourly_counts = [4, 2, 1, 1, 0, 1, 3, 8, 14, 19, 23, 26, 24, 21, 25, 27, 22, 18, 15, 12, 10, 8, 6, 5]
-    hour_labels = [f"{h:02d}:00" for h in range(24)]
+    try:
+        with open(AIRCRAFT_JSON_PATH) as f:
+            snapshot = _json.load(f)
+        aircraft = snapshot.get("aircraft", [])
+    except (FileNotFoundError, _json.JSONDecodeError, OSError):
+        aircraft = []
+
+    if aircraft:
+        plane = min(aircraft, key=lambda a: a.get("seen", 9999))
+        hex_code = plane.get("hex")
+        flight = (plane.get("flight") or "").strip() or None
+        info = _resolve_aircraft_info(hex_code, flight, plane.get("r"), plane.get("t"))
+        r_dst = plane.get("r_dst")
+        r_dir = plane.get("r_dir")
+        gs = plane.get("gs")
+        track = plane.get("track")
+        return {
+            **info,
+            "callsign": (flight or info["registration"] or hex_code or "").strip().upper(),
+            "altitude_ft": plane.get("alt_baro"),
+            "ground_speed_kt": round(gs) if gs is not None else None,
+            "track_deg": round(track) if track is not None else None,
+            "r_dst_nm": round(r_dst, 1) if r_dst is not None else None,
+            "r_dir_deg": round(r_dir) if r_dir is not None else None,
+            "r_dir_compass": _compass_bearing(r_dir) if r_dir is not None else None,
+            "seen_ago": _format_ago(plane.get("seen", 0)),
+        }
+
+    conn = sqlite3.connect(PLANES_DB_FILE)
+    # Order by id, not detected_at: detected_at only has 1-second resolution,
+    # so multiple detections logged in the same poll cycle (or the same
+    # second) tie on timestamp -- id is the strictly-increasing true
+    # insertion order and breaks that tie correctly.
+    row = conn.execute("""
+        SELECT detected_at, hex, flight, registration, type_designator, description,
+               is_commercial, airline_name, r_dst, r_dir, alt_baro, gs
+        FROM plane_detections ORDER BY id DESC LIMIT 1
+    """).fetchone()
+    conn.close()
+    if not row:
+        return None
+
+    (detected_at, hex_code, flight, registration, type_designator, description,
+     is_commercial, airline_name, r_dst, r_dir, alt_baro, gs) = row
+    try:
+        detected_dt = datetime.strptime(detected_at, "%Y-%m-%d %H:%M:%S")
+        ago_seconds = (datetime.now() - detected_dt).total_seconds()
+    except ValueError:
+        ago_seconds = 0
     return {
-        "total_today": sum(hourly_counts),
-        "max_altitude_today": 38000,
-        "most_common_type": "Boeing 737-800",
-        "hourly_counts": hourly_counts,
-        "hour_labels": hour_labels,
+        "callsign": (flight or registration or hex_code or "").strip().upper(),
+        "registration": registration or "—",
+        "type_code": type_designator,
+        "type_name": description or type_designator or "Unknown aircraft",
+        "is_commercial": bool(is_commercial),
+        "airline_name": airline_name,
+        "altitude_ft": alt_baro,
+        "ground_speed_kt": round(gs) if gs is not None else None,
+        "track_deg": None,  # not stored on the historical log row
+        "r_dst_nm": round(r_dst, 1) if r_dst is not None else None,
+        "r_dir_deg": round(r_dir) if r_dir is not None else None,
+        "r_dir_compass": _compass_bearing(r_dir) if r_dir is not None else None,
+        "seen_ago": _format_ago(ago_seconds),
+    }
+
+def get_daily_plane_stats_live():
+    conn = sqlite3.connect(PLANES_DB_FILE)
+    total_today = conn.execute(
+        "SELECT COUNT(*) FROM plane_detections WHERE date(detected_at) = date('now','localtime')"
+    ).fetchone()[0]
+    chart = conn.execute("""
+        SELECT strftime('%Y-%m-%d %H:00', detected_at) AS bucket, COUNT(*)
+        FROM plane_detections
+        WHERE detected_at >= datetime('now', 'localtime', '-24 hours')
+        GROUP BY bucket
+        ORDER BY bucket ASC
+    """).fetchall()
+    conn.close()
+    return {
+        "total_today": total_today,
+        "hour_labels": [row[0][-5:] for row in chart],
+        "hourly_counts": [row[1] for row in chart],
     }
 
 
@@ -717,8 +863,8 @@ def seasonal_trends():
 
 @app.route("/planes-detected")
 def planes_detected():
-    last_plane = get_last_plane()
-    daily = get_daily_plane_stats()
+    last_plane = get_last_plane_live()
+    daily = get_daily_plane_stats_live()
     return render_template("planes_detected.html", last_plane=last_plane, daily=daily, page_generated=page_generated_now())
 
 @app.route("/sitemap.xml")

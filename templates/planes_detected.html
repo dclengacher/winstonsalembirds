@@ -130,10 +130,15 @@ h2 {
 
     <div class="card">
         <h2 style="margin-top:0;">Last Plane Detected</h2>
+        {% if last_plane %}
         <div class="plane-stats">
             <div class="plane-stat">
                 <span class="plane-stat-label">Callsign</span>
                 <span class="plane-stat-value">{{ last_plane.callsign }}</span>
+            </div>
+            <div class="plane-stat">
+                <span class="plane-stat-label">Airline</span>
+                <span class="plane-stat-value">{{ last_plane.airline_name if last_plane.is_commercial else "General Aviation" }}</span>
             </div>
             <div class="plane-stat">
                 <span class="plane-stat-label">Aircraft</span>
@@ -141,44 +146,41 @@ h2 {
             </div>
             <div class="plane-stat">
                 <span class="plane-stat-label">Altitude</span>
-                <span class="plane-stat-value">{{ last_plane.altitude_ft }} ft</span>
+                <span class="plane-stat-value">{{ last_plane.altitude_ft if last_plane.altitude_ft is not none else '—' }} ft</span>
             </div>
             <div class="plane-stat">
-                <span class="plane-stat-label">Heading</span>
-                <span class="plane-stat-value">{{ last_plane.heading_deg }}&deg; {{ last_plane.heading_compass }}</span>
+                <span class="plane-stat-label">Distance &amp; Bearing</span>
+                <span class="plane-stat-value">{% if last_plane.r_dst_nm is not none %}{{ last_plane.r_dst_nm }} nm {{ last_plane.r_dir_compass }}{% else %}&mdash;{% endif %}</span>
             </div>
             <div class="plane-stat">
                 <span class="plane-stat-label">Ground Speed</span>
-                <span class="plane-stat-value">{{ last_plane.ground_speed_kt }} kt</span>
+                <span class="plane-stat-value">{{ last_plane.ground_speed_kt if last_plane.ground_speed_kt is not none else '—' }} kt</span>
             </div>
             <div class="plane-stat">
                 <span class="plane-stat-label">Seen</span>
                 <span class="plane-stat-value">{{ last_plane.seen_ago }}</span>
             </div>
         </div>
+        {% else %}
+        <p style="text-align:center;color:#888;">No aircraft logged yet.</p>
+        {% endif %}
     </div>
 
     <div class="charts-grid">
         <div class="chart-card">
-            <h3>Planes Detected Today</h3>
+            <h3>Planes Logged Today</h3>
             <div class="current-val">{{ daily.total_today }}</div>
         </div>
 
-        <div class="chart-card">
-            <h3>Highest Altitude Today</h3>
-            <div class="current-val">{{ daily.max_altitude_today }} ft</div>
-        </div>
-
-        <div class="chart-card">
-            <h3>Most Common Aircraft Today</h3>
-            <div class="current-val" style="font-size:1.1rem;">{{ daily.most_common_type }}</div>
-        </div>
-
         <div class="chart-card" style="background:#0d1b2a;">
-            <h3 style="color:#e8e8e8;">Heading</h3>
+            <h3 style="color:#e8e8e8;">Radar</h3>
             <div id="radarDial"></div>
             <div style="color:#7fd8ff;font-size:0.8rem;margin-top:8px;">
-                {{ last_plane.heading_deg }}&deg; {{ last_plane.heading_compass }} &middot; {{ last_plane.callsign }}
+                {% if last_plane and last_plane.r_dst_nm is not none %}
+                {{ last_plane.r_dst_nm }} nm {{ last_plane.r_dir_compass }} &middot; {{ last_plane.callsign }}
+                {% else %}
+                No position data
+                {% endif %}
             </div>
         </div>
 
@@ -192,7 +194,15 @@ h2 {
 <script>
     (function() {
         const cx = 90, cy = 90, r = 75;
-        const headingDeg = {{ last_plane.heading_deg }};
+        // Nautical miles at the dial's outer ring -- a conservative guess
+        // for a backyard RTL-SDR setup; tune once real range is observed.
+        const MAX_RANGE_NM = 40;
+
+        const hasPosition = {{ 'true' if last_plane and last_plane.r_dst_nm is not none else 'false' }};
+        const rDir = {{ last_plane.r_dir_deg if last_plane and last_plane.r_dir_deg is not none else 0 }};
+        const rDst = {{ last_plane.r_dst_nm if last_plane and last_plane.r_dst_nm is not none else 0 }};
+        const hasTrack = {{ 'true' if last_plane and last_plane.track_deg is not none else 'false' }};
+        const trackDeg = {{ last_plane.track_deg if last_plane and last_plane.track_deg is not none else 0 }};
 
         // 0deg = up (North), increasing clockwise -- same rotation convention
         // as the Daylight Dial's pctToXY, just parameterized in degrees
@@ -201,8 +211,6 @@ h2 {
             const rad = (deg - 90) * Math.PI / 180;
             return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
         }
-
-        const [nx, ny] = polar(headingDeg, r - 8);
 
         const ticks = [0, 90, 180, 270].map(deg => {
             const [x1, y1] = polar(deg, r);
@@ -215,15 +223,36 @@ h2 {
             return `<text x="${x}" y="${y}" font-size="11" fill="#7fd8ff" text-anchor="middle" dominant-baseline="middle">${label}</text>`;
         }).join('');
 
+        // Concentric range rings at 1/3 and 2/3 of MAX_RANGE_NM, for a
+        // proper radar-scope look rather than a single bare circle.
+        const rings = [r / 3, (2 * r) / 3].map(radius =>
+            `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="#274b6d" stroke-width="1"/>`
+        ).join('');
+
+        let planeMarker = '';
+        if (hasPosition) {
+            const dist = Math.min(rDst / MAX_RANGE_NM, 1) * r;
+            const [px, py] = polar(rDir, dist);
+            let trackLine = '';
+            if (hasTrack) {
+                const [tx, ty] = polar(trackDeg, Math.min(dist + 14, r));
+                trackLine = `<line x1="${px}" y1="${py}" x2="${tx}" y2="${ty}" stroke="#ff9f43" stroke-width="2"/>`;
+            }
+            planeMarker = `
+                <line x1="${cx}" y1="${cy}" x2="${px}" y2="${py}" stroke="#274b6d" stroke-width="1" stroke-dasharray="2,2"/>
+                ${trackLine}
+                <circle cx="${px}" cy="${py}" r="5" fill="#7fd8ff" stroke="#e8e8e8" stroke-width="1.5">
+                    <animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite"/>
+                </circle>`;
+        }
+
         const svg = `
         <svg viewBox="0 0 180 180" width="180" height="180" style="margin:0 auto;display:block;">
             <circle cx="${cx}" cy="${cy}" r="${r}" fill="#16233a" stroke="#274b6d" stroke-width="2"/>
+            ${rings}
             ${ticks}
             ${labels}
-            <line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="#ff9f43" stroke-width="2.5"/>
-            <circle cx="${nx}" cy="${ny}" r="5" fill="#7fd8ff" stroke="#e8e8e8" stroke-width="1.5">
-                <animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite"/>
-            </circle>
+            ${planeMarker}
             <circle cx="${cx}" cy="${cy}" r="3" fill="#e8e8e8"/>
         </svg>`;
         document.getElementById('radarDial').innerHTML = svg;
