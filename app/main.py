@@ -522,6 +522,100 @@ def get_seasonal_trend_data():
     }
 
 
+AIRCRAFT_JSON_PATH = "/run/readsb/aircraft.json"  # readsb/tar1090 live snapshot -- see get_aircraft_snapshot()
+
+AIRCRAFT_TYPE_NAMES = {
+    "A319": "Airbus A319", "A320": "Airbus A320", "A321": "Airbus A321",
+    "B737": "Boeing 737-700", "B738": "Boeing 737-800", "B739": "Boeing 737-900",
+    "B39M": "Boeing 737 MAX 9", "B788": "Boeing 787-8", "B77W": "Boeing 777-300ER",
+    "E75L": "Embraer E175", "CRJ7": "Bombardier CRJ-700", "CRJ9": "Bombardier CRJ-900",
+    "C172": "Cessna 172", "PA28": "Piper PA-28", "SR22": "Cirrus SR22",
+}
+
+COMPASS_POINTS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+                   "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+
+def _compass_bearing(deg):
+    return COMPASS_POINTS[int((deg / 22.5) + 0.5) % 16]
+
+def get_aircraft_snapshot():
+    """
+    Returns the aircraft currently visible to the receiver, in readsb's own
+    schema -- the same shape as the "aircraft" array in
+    /run/readsb/aircraft.json (hex, flight, r, t, alt_baro, alt_geom, gs,
+    track, baro_rate, squawk, category, lat, lon, seen, rssi).
+
+    No live feed is wired up yet, so this returns realistic placeholder
+    data in that exact shape. Swapping in the real feed later means
+    replacing this function's body with
+    json.load(open(AIRCRAFT_JSON_PATH))["aircraft"] -- everything
+    downstream already consumes this shape and doesn't change.
+    """
+    return [
+        {"hex": "a1b2c3", "flight": "AAL1423 ", "r": "N123AA", "t": "B738",
+         "alt_baro": 8500, "alt_geom": 8650, "gs": 245.3, "track": 214.6,
+         "baro_rate": -1280, "squawk": "4610", "category": "A3",
+         "lat": 36.132, "lon": -80.301, "seen": 4.2, "rssi": -21.4},
+        {"hex": "b4c5d6", "flight": "DAL2210 ", "r": "N882DL", "t": "B739",
+         "alt_baro": 34000, "alt_geom": 34200, "gs": 458.1, "track": 62.3,
+         "baro_rate": 0, "squawk": "3141", "category": "A3",
+         "lat": 36.281, "lon": -80.104, "seen": 18.7, "rssi": -28.9},
+        {"hex": "c7d8e9", "flight": None, "r": "N4471X", "t": "C172",
+         "alt_baro": 2500, "alt_geom": 2620, "gs": 98.4, "track": 178.2,
+         "baro_rate": -60, "squawk": "1200", "category": "A1",
+         "lat": 36.095, "lon": -80.256, "seen": 55.0, "rssi": -33.1},
+    ]
+
+def get_last_plane():
+    # Same "always show something" contract as the dashboard's birds table:
+    # the placeholder snapshot is never empty, and once the real feed is
+    # wired up, aircraft.json only lists aircraft currently in range, so
+    # there's always a most-recent one to show.
+    aircraft = get_aircraft_snapshot()
+    plane = min(aircraft, key=lambda a: a.get("seen", 9999))
+    seen = plane.get("seen", 0)
+    if seen < 60:
+        seen_ago = f"{int(seen)}s ago"
+    elif seen < 3600:
+        seen_ago = f"{int(seen // 60)}m ago"
+    else:
+        seen_ago = f"{int(seen // 3600)}h {int((seen % 3600) // 60)}m ago"
+    type_code = plane.get("t") or ""
+    heading = plane.get("track", 0)
+    callsign = (plane.get("flight") or plane.get("r") or plane.get("hex", "")).strip().upper()
+    return {
+        "callsign": callsign,
+        "registration": plane.get("r", "—"),
+        "type_code": type_code,
+        "type_name": AIRCRAFT_TYPE_NAMES.get(type_code, type_code or "Unknown"),
+        "altitude_ft": plane.get("alt_baro"),
+        "heading_deg": round(heading),
+        "heading_compass": _compass_bearing(heading),
+        "ground_speed_kt": round(plane.get("gs", 0)),
+        "squawk": plane.get("squawk"),
+        "seen_ago": seen_ago,
+    }
+
+def get_daily_plane_stats():
+    """
+    Aggregated per-day stats and an hourly trend for the last 24 hours.
+    aircraft.json itself only ever holds a live snapshot, not history --
+    once a background poller logs each newly-seen aircraft into a table
+    (mirroring how BirdNET-Pi's `detections` table works for birds), this
+    becomes a real SQL query. For now it's realistic placeholder data in
+    the shape that query would return.
+    """
+    hourly_counts = [4, 2, 1, 1, 0, 1, 3, 8, 14, 19, 23, 26, 24, 21, 25, 27, 22, 18, 15, 12, 10, 8, 6, 5]
+    hour_labels = [f"{h:02d}:00" for h in range(24)]
+    return {
+        "total_today": sum(hourly_counts),
+        "max_altitude_today": 38000,
+        "most_common_type": "Boeing 737-800",
+        "hourly_counts": hourly_counts,
+        "hour_labels": hour_labels,
+    }
+
+
 WITTBOY_VARS = ["tempf", "humidity", "baromrelin", "winddir", "windspeedmph", "windgustmph", "solarradiation", "uv", "rainrate", "dailyrain"]
 
 def get_wittboy_correlation():
@@ -620,6 +714,12 @@ def dueling_models():
 def seasonal_trends():
     trend_data = get_seasonal_trend_data()
     return render_template("seasonal_trends.html", trend_data=trend_data, page_generated=page_generated_now())
+
+@app.route("/planes-detected")
+def planes_detected():
+    last_plane = get_last_plane()
+    daily = get_daily_plane_stats()
+    return render_template("planes_detected.html", last_plane=last_plane, daily=daily, page_generated=page_generated_now())
 
 @app.route("/sitemap.xml")
 def sitemap():
