@@ -103,9 +103,12 @@ threading.Thread(target=run_ebird_loop, daemon=True).start()
 
 AIRCRAFT_JSON_PATH = "/run/readsb/aircraft.json"  # readsb/tar1090 live snapshot
 AIRCRAFT_TYPES_PATH = "/home/david/birdnet/data/aircraft_types.json"  # from scripts/build_aircraft_type_db.py
+AIRCRAFT_TYPE_NAMES_PATH = "/home/david/birdnet/data/aircraft_type_names.json"  # from scripts/build_aircraft_type_db.py -- type_designator -> human name
 PLANES_DB_FILE = "/home/david/birdnet/data/planes.db"
 PLANES_POLL_INTERVAL_SECONDS = 20
-RECENT_DETECTIONS_LIMIT = 15  # rows returned for the /api/planes-live history table
+RECENT_DETECTIONS_WINDOW_MINUTES = 30  # /api/planes-live history table: a time window, not a row count, so a busy burst can't truncate it to a few minutes
+NO_CALLSIGN_LABEL = "(no callsign)"  # shown instead of a raw ICAO hex when flight/registration are both blank -- a bare hex looks enough like a real callsign to mislead
+DISPLAY_RANGE_MI = 5.0  # live radar/table are narrowed to this 3D slant range; the poll loop below still logs every aircraft regardless of distance
 
 def _load_aircraft_types():
     try:
@@ -116,6 +119,16 @@ def _load_aircraft_types():
         return {}
 
 _aircraft_types = _load_aircraft_types()
+
+def _load_aircraft_type_names():
+    try:
+        with open(AIRCRAFT_TYPE_NAMES_PATH) as f:
+            return _json.load(f)
+    except (FileNotFoundError, _json.JSONDecodeError):
+        print(f"[WARN] {AIRCRAFT_TYPE_NAMES_PATH} not found -- run scripts/build_aircraft_type_db.py on the Pi")
+        return {}
+
+_aircraft_type_names = _load_aircraft_type_names()
 
 def _init_planes_db():
     os.makedirs(os.path.dirname(PLANES_DB_FILE), exist_ok=True)
@@ -180,12 +193,23 @@ def run_planes_poll_loop():
                     flight = (a.get("flight") or "").strip() or None
                     # Our merged tar1090-db lookup is authoritative when it
                     # has the hex; readsb's own r/t fields (when present)
-                    # fill the gap otherwise.
+                    # fill the gap otherwise. Some hex entries have a
+                    # type_designator but no description (e.g. "C68A" with
+                    # nothing friendly to show) -- the type-designator name
+                    # lookup (keyed differently, built by the same script)
+                    # fills that gap as a second-tier fallback.
                     lookup = _aircraft_types.get(hex_code, {})
                     registration = lookup.get("registration") or a.get("r")
                     type_designator = lookup.get("type_designator") or a.get("t")
-                    description = lookup.get("description")
+                    description = lookup.get("description") or (
+                        _aircraft_type_names.get(type_designator) if type_designator else None
+                    )
                     is_commercial, airline_name = _classify_flight(flight)
+                    # No distance filtering here, intentionally: the live
+                    # page's radar/table are narrowed to DISPLAY_RANGE_MI,
+                    # but this logging loop keeps recording every aircraft
+                    # it sees regardless of distance, so the research
+                    # dataset keeps growing with full-range data.
                     conn.execute(
                         """INSERT INTO plane_detections
                            (detected_at, hex, flight, registration, type_designator, description,
@@ -634,31 +658,65 @@ def get_seasonal_trend_data():
     }
 
 
+NM_TO_MI = 1.150779448  # nautical miles -> statute miles
+FT_TO_MI = 1.0 / 5280.0  # feet -> statute miles
+
+def _slant_range_mi(r_dst_nm, alt_baro_ft):
+    """True 3D straight-line distance in statute miles: sqrt(ground^2 +
+    altitude^2), both converted to the same unit first -- ground distance
+    (r_dst, nautical miles) and altitude (alt_baro, feet) arrive in
+    different units from readsb, so a bare ground-only r_dst badly
+    understates real range for anything at cruise altitude.
+    None if either input is missing -- we'd rather exclude an aircraft from
+    the DISPLAY_RANGE_MI filter than guess whether it's actually in range
+    without real altitude data."""
+    if r_dst_nm is None or alt_baro_ft is None:
+        return None
+    import math
+    ground_mi = r_dst_nm * NM_TO_MI
+    alt_mi = alt_baro_ft * FT_TO_MI
+    return math.sqrt(ground_mi ** 2 + alt_mi ** 2)
+
+def _within_display_range(distance_mi):
+    """Shared by both get_live_aircraft_snapshot() (radar) and
+    get_planes_live_payload()'s recent-detections query (table) so the two
+    can never disagree about what counts as "in range" -- same threshold,
+    same computation, used identically in both places."""
+    return distance_mi is not None and distance_mi <= DISPLAY_RANGE_MI
+
 def _live_aircraft_entry(plane):
-    """Minimal per-aircraft radar entry: hex (trail key / label fallback),
-    callsign (blip label), and position (r_dst_nm/r_dir_deg) for plotting --
-    all the radar actually plots. Resolved type/registration/airline info
-    used to be computed here too, but that only ever fed the "Last Plane
-    Detected" spotlight card (removed: with multiple simultaneous aircraft,
-    re-picking whichever one's packet arrived most recently every 5s poll
-    just looked like flicker, and it was redundant with the radar/table
-    anyway). Re-add via _aircraft_types/_classify_flight if a future radar
-    feature (e.g. a blip tooltip) needs it."""
+    """Minimal per-aircraft radar entry: hex (trail key), callsign (blip
+    label), and position (distance_mi/r_dir_deg) for plotting -- all the
+    radar actually plots. Resolved type/registration/airline info used to
+    be computed here too, but that only ever fed the "Last Plane Detected"
+    spotlight card (removed: with multiple simultaneous aircraft, re-picking
+    whichever one's packet arrived most recently every 5s poll just looked
+    like flicker, and it was redundant with the radar/table anyway). Re-add
+    via _aircraft_types/_classify_flight if a future radar feature (e.g. a
+    blip tooltip) needs it.
+
+    callsign falls back to NO_CALLSIGN_LABEL rather than the raw hex when
+    flight is blank -- a bare hex like "A3EDAA" is shaped enough like a
+    real callsign to mislead."""
     hex_code = plane.get("hex")
     flight = (plane.get("flight") or "").strip() or None
-    r_dst = plane.get("r_dst")
+    distance_mi = _slant_range_mi(plane.get("r_dst"), plane.get("alt_baro"))
     r_dir = plane.get("r_dir")
     return {
         "hex": hex_code,
-        "callsign": (flight or hex_code or "").strip().upper(),
-        "r_dst_nm": round(r_dst, 1) if r_dst is not None else None,
+        "callsign": flight.upper() if flight else NO_CALLSIGN_LABEL,
+        "distance_mi": round(distance_mi, 1) if distance_mi is not None else None,
         "r_dir_deg": round(r_dir) if r_dir is not None else None,
     }
 
 def get_live_aircraft_snapshot():
-    """Every aircraft currently in the live readsb snapshot, resolved and
-    sorted nearest-first. Empty list (not an error) if aircraft.json is
-    missing/unreadable or simply lists nothing right now."""
+    """Every aircraft currently in the live readsb snapshot that's within
+    DISPLAY_RANGE_MI (true 3D distance), resolved and sorted nearest-first.
+    This is a display-only filter for the radar -- the background poll loop
+    (run_planes_poll_loop) logs every aircraft it sees regardless of
+    distance, unaffected by this. Empty list (not an error) if aircraft.json
+    is missing/unreadable, lists nothing right now, or nothing currently
+    visible happens to be within range."""
     try:
         with open(AIRCRAFT_JSON_PATH) as f:
             snapshot = _json.load(f)
@@ -667,7 +725,8 @@ def get_live_aircraft_snapshot():
         aircraft = []
 
     entries = [_live_aircraft_entry(a) for a in aircraft if a.get("hex")]
-    entries.sort(key=lambda e: e["r_dst_nm"] if e["r_dst_nm"] is not None else float("inf"))
+    entries = [e for e in entries if _within_display_range(e["distance_mi"])]
+    entries.sort(key=lambda e: e["distance_mi"])
     return entries
 
 def get_hourly_plane_counts():
@@ -687,11 +746,22 @@ def get_hourly_plane_counts():
 
 def get_planes_live_payload():
     """Single-response payload for the /api/planes-live poll: every aircraft
-    currently visible (for the radar), a short history of the most recent
-    logged rows (for the recent-detections table), and hourly counts (for
-    the trend chart) -- everything the frontend's 5-second refresh needs to
-    update the whole page in one round trip. No day-total figure here --
-    the "Planes Logged Today" stat card that used it was removed."""
+    currently visible within DISPLAY_RANGE_MI (for the radar), the last
+    RECENT_DETECTIONS_WINDOW_MINUTES of logged rows that were also within
+    DISPLAY_RANGE_MI at detection time (for the recent-detections table),
+    and hourly counts (for the trend chart, NOT range-filtered -- it's a
+    long-run activity trend, not a "what's nearby" view) -- everything the
+    frontend's 5-second refresh needs to update the whole page in one round
+    trip. No day-total figure here -- the "Planes Logged Today" stat card
+    that used it was removed.
+
+    The radar (aircraft) and table (recent) apply the identical
+    _within_display_range() threshold to the identical _slant_range_mi()
+    computation, so they can never disagree about what's "in range" --
+    the only reason they can still show a different aircraft is that
+    aircraft is a live snapshot (right now) and recent is a time-windowed
+    detection history (whenever each row was logged), which are genuinely
+    different questions even under the same distance rule."""
     aircraft = get_live_aircraft_snapshot()
     hourly = get_hourly_plane_counts()
 
@@ -699,25 +769,32 @@ def get_planes_live_payload():
     recent_rows = conn.execute("""
         SELECT detected_at, hex, flight, registration, type_designator, description,
                is_commercial, airline_name, r_dst, gs, alt_baro
-        FROM plane_detections ORDER BY id DESC LIMIT ?
-    """, (RECENT_DETECTIONS_LIMIT,)).fetchall()
+        FROM plane_detections
+        WHERE detected_at >= datetime('now', 'localtime', ?)
+        ORDER BY id DESC
+    """, (f"-{RECENT_DETECTIONS_WINDOW_MINUTES} minutes",)).fetchall()
     conn.close()
 
     recent = []
     for (detected_at, hex_code, flight, registration, type_designator, description,
          is_commercial, airline_name, r_dst, gs, alt_baro) in recent_rows:
+        distance_mi = _slant_range_mi(r_dst, alt_baro)
+        if not _within_display_range(distance_mi):
+            continue
         try:
             detected_epoch = int(datetime.strptime(detected_at, "%Y-%m-%d %H:%M:%S").timestamp())
         except ValueError:
             detected_epoch = None
+        flight = (flight or "").strip() or None
+        callsign = flight.upper() if flight else (registration or NO_CALLSIGN_LABEL)
         recent.append({
             "detected_at_epoch": detected_epoch,
-            "callsign": (flight or registration or hex_code or "").strip().upper(),
+            "callsign": callsign,
             "is_commercial": bool(is_commercial),
             "airline_name": airline_name,
             "type_name": description or type_designator or "Unknown aircraft",
             "altitude_ft": alt_baro,
-            "r_dst_nm": round(r_dst, 1) if r_dst is not None else None,
+            "distance_mi": round(distance_mi, 1),
             "ground_speed_kt": round(gs) if gs is not None else None,
         })
 

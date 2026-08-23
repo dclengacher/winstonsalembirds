@@ -56,6 +56,25 @@ deep a given shard sits.
 Each value is [registration, type_designator, flag_code, description] --
 we keep registration/type_designator/description (flag_code isn't used
 anywhere downstream, so it's dropped to keep the merged file lean).
+
+Second output -- type-designator name lookup:
+Some hex shard entries have a type_designator (e.g. "C68A", "CL35") but no
+description, so the app has nothing friendly to show for them. The two
+excluded reference files above -- icao_aircraft_types.js and
+icao_aircraft_types2.js -- are keyed by that same type_designator instead
+of by hex, so while we're already walking past them for the primary merge,
+we also harvest a second lookup from them: type_designator -> human name.
+The two files use different shapes (confirmed real on the Pi):
+  - icao_aircraft_types2.js: {"A002": ["IRKUT A-002", "G1P", "L"]} -- the
+    first array element is a real "Manufacturer Model" name. Used as the
+    primary source.
+  - icao_aircraft_types.js: {"A002": {"desc": "G1P", "wtc": "L"}} -- "desc"
+    here is a short ICAO aircraft description code (engine count/type/wing
+    configuration), not a full name -- it's the only text this file offers
+    per designator, so it's used only as a last-resort fallback when
+    icao_aircraft_types2.js doesn't have the same designator.
+This second lookup is written to TYPE_NAMES_OUTPUT_PATH, independent of
+the primary hex-keyed merge above (app/main.py reads both files).
 """
 import gzip
 import json
@@ -64,6 +83,7 @@ import sys
 
 TAR1090_DB_PATH = "/usr/local/share/tar1090/git-db/db"
 OUTPUT_PATH = "/home/david/birdnet/data/aircraft_types.json"
+TYPE_NAMES_OUTPUT_PATH = "/home/david/birdnet/data/aircraft_type_names.json"
 
 HEX_CHARS = set("0123456789abcdefABCDEF")
 FULL_HEX_LEN = 6
@@ -81,6 +101,11 @@ KNOWN_NON_SHARD_FILENAME_EXAMPLES = (
     "files.js", "regIcao.js", "airport-coords.js", "icao_aircraft_types.js",
     "icao_aircraft_types2.js", "operators.js", "ranges.js",
 )
+
+# These two non-shard files ARE actively read, for the second (type-name)
+# output -- see module docstring. icao_aircraft_types2.js entries win on
+# conflict; icao_aircraft_types.js is a fallback-only source.
+TYPE_NAME_REFERENCE_FILENAMES = {"icao_aircraft_types.js", "icao_aircraft_types2.js"}
 
 # tar1090's own tree-navigation key, not an aircraft record -- see docstring.
 CHILDREN_KEY = "children"
@@ -122,6 +147,23 @@ def _is_hex_shard_filename(filename):
     airport-coords.js, ...). See module docstring."""
     stem = _strip_known_extension(filename)
     return bool(stem) and all(c in HEX_CHARS for c in stem)
+
+
+def _extract_type_name(filename, value):
+    """Pull a human-readable name out of one entry of icao_aircraft_types.js
+    or icao_aircraft_types2.js -- see module docstring for the two shapes.
+    Returns None if `value` doesn't match the shape expected for that
+    filename (defensive: real data should always match, but a malformed or
+    future-format entry should be skipped, not crash the run)."""
+    if filename == "icao_aircraft_types2.js":
+        if isinstance(value, (list, tuple)) and value and value[0]:
+            return str(value[0])
+        return None
+    if filename == "icao_aircraft_types.js":
+        if isinstance(value, dict) and value.get("desc"):
+            return str(value["desc"])
+        return None
+    return None
 
 
 def _path_prefix(root, path):
@@ -211,8 +253,29 @@ def merge(tar1090_db_path=TAR1090_DB_PATH):
     skipped_non_dict_shards = 0
     skipped_non_hex_filenames = 0
 
+    # Second output: type_designator -> human name, harvested from the two
+    # reference files below while we're already walking past them for the
+    # primary merge -- see module docstring. type_names_primary wins ties.
+    type_names_primary = {}
+    type_names_fallback = {}
+
     for shard_path in shards:
-        if not _is_hex_shard_filename(os.path.basename(shard_path)):
+        basename = os.path.basename(shard_path)
+        if not _is_hex_shard_filename(basename):
+            if basename in TYPE_NAME_REFERENCE_FILENAMES:
+                try:
+                    ref_data = _read_shard_json(shard_path)
+                except Exception as e:
+                    print(f"[WARN] could not read {shard_path}: {e}")
+                else:
+                    if isinstance(ref_data, dict):
+                        target = type_names_primary if basename == "icao_aircraft_types2.js" else type_names_fallback
+                        for designator, value in ref_data.items():
+                            name = _extract_type_name(basename, value)
+                            if name:
+                                target[designator] = name
+                    else:
+                        print(f"[WARN] skipping {shard_path}: top-level JSON is {type(ref_data).__name__}, not an object")
             skipped_non_hex_filenames += 1
             continue
 
@@ -258,7 +321,16 @@ def merge(tar1090_db_path=TAR1090_DB_PATH):
     with open(OUTPUT_PATH, "w") as f:
         json.dump(merged, f)
 
+    # icao_aircraft_types2.js names win on conflict; icao_aircraft_types.js
+    # only fills in designators the primary source didn't have.
+    type_names = {**type_names_fallback, **type_names_primary}
+    os.makedirs(os.path.dirname(TYPE_NAMES_OUTPUT_PATH), exist_ok=True)
+    with open(TYPE_NAMES_OUTPUT_PATH, "w") as f:
+        json.dump(type_names, f)
+
     print(f"Merged {len(merged)} aircraft type entries -> {OUTPUT_PATH}")
+    print(f"Merged {len(type_names)} type-designator -> name entries -> {TYPE_NAMES_OUTPUT_PATH}")
+    print(f"  ({len(type_names_primary)} from icao_aircraft_types2.js, {len(type_names_fallback)} from icao_aircraft_types.js as fallback-only source)")
     if skipped_unresolvable_prefix:
         print(f"  ({skipped_unresolvable_prefix} keys skipped -- unresolvable hex prefix)")
         print(f"  sample unresolvable-prefix keys (up to {SKIP_SAMPLE_LIMIT}, max {SKIP_SAMPLE_PER_SHARD} per shard):")
