@@ -18,7 +18,15 @@ the extension, since a plain .json or .json.gz shard would also be valid
 input). Each shard's keys are either:
   - the full 6-char ICAO hex ("a1b2c3"), or
   - a suffix of it, with the leading characters implied by the shard's own
-    path (e.g. a shard at db/a1/b2.js holimg key "c3" implies hex "a1b2c3").
+    path (e.g. a shard at db/a1/b2.js holding key "c3" implies hex "a1b2c3").
+
+Confirmed on the real Pi: the db/ directory also holds a handful of files
+that aren't hex-keyed shards at all (e.g. icao_aircraft_types.js,
+airport-coords.js) -- same .js-but-possibly-gzipped treatment applies, but
+their top-level JSON isn't a flat {hex: [...]} object (one was a list,
+which crashed an earlier version of this script on `.items()`). Anything
+whose parsed top-level JSON isn't a dict is skipped with a warning naming
+the file, rather than assumed to be a shard.
 
 We don't replicate tar1090's JS tree-walk logic to figure out the prefix
 depth -- instead, for each shard we derive a path-based prefix from its
@@ -119,12 +127,24 @@ def merge(tar1090_db_path=TAR1090_DB_PATH):
     merged = {}
     skipped_keys = 0
     failed_shards = 0
+    skipped_shards = 0
     for shard_path in shards:
         try:
             data = _read_shard_json(shard_path)
         except Exception as e:
             print(f"[WARN] could not read {shard_path}: {e}")
             failed_shards += 1
+            continue
+
+        # The db/ directory also holds a few non-shard files alongside the
+        # actual hex-keyed shards -- e.g. icao_aircraft_types.js (a
+        # type-designator -> description lookup) and airport-coords.js,
+        # which are JSON but not flat {hex: [...]} dicts (some are lists).
+        # Skip anything that isn't a dict at the top level rather than
+        # crashing on .items().
+        if not isinstance(data, dict):
+            print(f"[WARN] skipping {shard_path}: top-level JSON is {type(data).__name__}, not an object -- not a hex-keyed shard")
+            skipped_shards += 1
             continue
 
         prefix = _path_prefix(tar1090_db_path, shard_path)
@@ -152,6 +172,8 @@ def merge(tar1090_db_path=TAR1090_DB_PATH):
     print(f"Merged {len(merged)} aircraft type entries -> {OUTPUT_PATH}")
     if skipped_keys:
         print(f"  ({skipped_keys} keys skipped -- unresolvable prefix or malformed value)")
+    if skipped_shards:
+        print(f"  ({skipped_shards} non-shard file(s) skipped -- not a hex-keyed JSON object)")
     if failed_shards:
         print(f"  ({failed_shards} shard file(s) failed to read)")
 
