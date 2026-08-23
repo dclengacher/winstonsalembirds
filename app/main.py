@@ -169,6 +169,12 @@ def _classify_flight(flight):
     return False, None
 
 _active_aircraft_hexes = set()
+# hex -> id of that hex's currently-open plane_detections row (the row
+# inserted when it was last added to _active_aircraft_hexes). Lets each
+# later poll UPDATE the same row by primary key instead of re-querying
+# "the most recent row for this hex" every cycle. Pruned in lockstep with
+# _active_aircraft_hexes below; repopulated on INSERT via cur.lastrowid.
+_active_aircraft_row_ids = {}
 
 def run_planes_poll_loop():
     # Same shape as run_ebird_loop -- a daemon thread on its own poll
@@ -176,7 +182,18 @@ def run_planes_poll_loop():
     # Difference from eBird: this one writes to a database, so it needs to
     # track what was already active last cycle to only log genuinely new
     # detections rather than re-logging every still-visible aircraft.
-    global _active_aircraft_hexes
+    #
+    # Aircraft that are still active (already logged earlier this same
+    # tracking session) get their existing row's live/positional columns
+    # UPDATEd in place every cycle instead of left untouched, so the stored
+    # row keeps reflecting where the aircraft currently is rather than
+    # freezing at wherever it happened to be at first detection. This
+    # matters because ADS-B typically picks up aircraft well outside
+    # DISPLAY_RANGE_MI -- without this, a plane first logged far away would
+    # permanently fail the Recent Detections table's range filter even
+    # after flying directly overhead. detected_at is deliberately left
+    # alone -- it stays the original first-detection timestamp.
+    global _active_aircraft_hexes, _active_aircraft_row_ids
     while True:
         try:
             with open(AIRCRAFT_JSON_PATH) as f:
@@ -184,47 +201,72 @@ def run_planes_poll_loop():
             current = snapshot.get("aircraft", [])
             current_hexes = {a["hex"] for a in current if a.get("hex")}
             newly_seen = [a for a in current if a.get("hex") and a["hex"] not in _active_aircraft_hexes]
+            still_active = [a for a in current if a.get("hex") and a["hex"] in _active_aircraft_hexes]
 
-            if newly_seen:
+            if newly_seen or still_active:
                 conn = sqlite3.connect(PLANES_DB_FILE)
-                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                for a in newly_seen:
-                    hex_code = a["hex"]
-                    flight = (a.get("flight") or "").strip() or None
-                    # Our merged tar1090-db lookup is authoritative when it
-                    # has the hex; readsb's own r/t fields (when present)
-                    # fill the gap otherwise. Some hex entries have a
-                    # type_designator but no description (e.g. "C68A" with
-                    # nothing friendly to show) -- the type-designator name
-                    # lookup (keyed differently, built by the same script)
-                    # fills that gap as a second-tier fallback.
-                    lookup = _aircraft_types.get(hex_code, {})
-                    registration = lookup.get("registration") or a.get("r")
-                    type_designator = lookup.get("type_designator") or a.get("t")
-                    description = lookup.get("description") or (
-                        _aircraft_type_names.get(type_designator) if type_designator else None
+
+                if newly_seen:
+                    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    for a in newly_seen:
+                        hex_code = a["hex"]
+                        flight = (a.get("flight") or "").strip() or None
+                        # Our merged tar1090-db lookup is authoritative when it
+                        # has the hex; readsb's own r/t fields (when present)
+                        # fill the gap otherwise. Some hex entries have a
+                        # type_designator but no description (e.g. "C68A" with
+                        # nothing friendly to show) -- the type-designator name
+                        # lookup (keyed differently, built by the same script)
+                        # fills that gap as a second-tier fallback.
+                        lookup = _aircraft_types.get(hex_code, {})
+                        registration = lookup.get("registration") or a.get("r")
+                        type_designator = lookup.get("type_designator") or a.get("t")
+                        description = lookup.get("description") or (
+                            _aircraft_type_names.get(type_designator) if type_designator else None
+                        )
+                        is_commercial, airline_name = _classify_flight(flight)
+                        # No distance filtering here, intentionally: the live
+                        # page's radar/table are narrowed to DISPLAY_RANGE_MI,
+                        # but this logging loop keeps recording every aircraft
+                        # it sees regardless of distance, so the research
+                        # dataset keeps growing with full-range data.
+                        cur = conn.execute(
+                            """INSERT INTO plane_detections
+                               (detected_at, hex, flight, registration, type_designator, description,
+                                category, is_commercial, airline_name, r_dst, r_dir, alt_baro, baro_rate, gs, rssi)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            (now_str, hex_code, flight, registration, type_designator, description,
+                             a.get("category"), int(is_commercial), airline_name,
+                             a.get("r_dst"), a.get("r_dir"), a.get("alt_baro"),
+                             a.get("baro_rate"), a.get("gs"), a.get("rssi")),
+                        )
+                        _active_aircraft_row_ids[hex_code] = cur.lastrowid
+                    print(f"[{time.strftime('%X')}] Planes poll -> {len(newly_seen)} newly detected ({len(current_hexes)} active)")
+
+                if still_active:
+                    # Same distance-unfiltered intent as the insert above --
+                    # this refreshes the live columns regardless of range;
+                    # only the display-side query filters by distance. One
+                    # UPDATE per already-active aircraft, targeted by the
+                    # row id cached at insert time (no per-row SELECT).
+                    conn.executemany(
+                        """UPDATE plane_detections
+                           SET r_dst = ?, r_dir = ?, alt_baro = ?, baro_rate = ?, gs = ?, rssi = ?
+                           WHERE id = ?""",
+                        [
+                            (a.get("r_dst"), a.get("r_dir"), a.get("alt_baro"),
+                             a.get("baro_rate"), a.get("gs"), a.get("rssi"),
+                             _active_aircraft_row_ids[a["hex"]])
+                            for a in still_active
+                            if a["hex"] in _active_aircraft_row_ids
+                        ],
                     )
-                    is_commercial, airline_name = _classify_flight(flight)
-                    # No distance filtering here, intentionally: the live
-                    # page's radar/table are narrowed to DISPLAY_RANGE_MI,
-                    # but this logging loop keeps recording every aircraft
-                    # it sees regardless of distance, so the research
-                    # dataset keeps growing with full-range data.
-                    conn.execute(
-                        """INSERT INTO plane_detections
-                           (detected_at, hex, flight, registration, type_designator, description,
-                            category, is_commercial, airline_name, r_dst, r_dir, alt_baro, baro_rate, gs, rssi)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (now_str, hex_code, flight, registration, type_designator, description,
-                         a.get("category"), int(is_commercial), airline_name,
-                         a.get("r_dst"), a.get("r_dir"), a.get("alt_baro"),
-                         a.get("baro_rate"), a.get("gs"), a.get("rssi")),
-                    )
+
                 conn.commit()
                 conn.close()
-                print(f"[{time.strftime('%X')}] Planes poll -> {len(newly_seen)} newly detected ({len(current_hexes)} active)")
 
             _active_aircraft_hexes = current_hexes
+            _active_aircraft_row_ids = {h: rid for h, rid in _active_aircraft_row_ids.items() if h in current_hexes}
         except FileNotFoundError:
             print(f"[WARN] {AIRCRAFT_JSON_PATH} not found -- readsb/tar1090 not running or not wired up yet")
         except Exception as e:
