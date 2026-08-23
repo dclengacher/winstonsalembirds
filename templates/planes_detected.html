@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Planes Detected — Winston-Salem Bird Station</title>
+    <meta name="description" content="Aircraft passing over a Winston-Salem, NC backyard, decoded live from ADS-B transponder broadcasts via an RTL-SDR receiver.">
+    <meta property="og:title" content="Planes Detected — Winston-Salem Bird Station">
+    <meta property="og:description" content="Live-decoded aircraft overhead in a Winston-Salem, NC backyard, via ADS-B and an RTL-SDR receiver.">
+    <meta property="og:image" content="https://winstonsalembirds.com/static/Dashboard.png">
+    <meta property="og:url" content="https://winstonsalembirds.com/planes-detected">
+    <meta property="og:type" content="website">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+/* Shared site styles — single source of truth for typography + nav across all pages */
+
+body {
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+  margin: 20px;
+  background-color: #f4f6f8;
+  color: #333;
+}
+
+h1 {
+  font-size: 1.5rem;
+  color: #2c3e50;
+  text-align: center;
+  margin: 0 0 4px;
+}
+
+h2 {
+  font-size: 1.1rem;
+  color: #333;
+  text-align: center;
+  margin-top: 0;
+}
+
+.page-subtitle {
+  margin: 5px 0 0;
+  color: #666;
+  font-size: 1rem;
+  text-align: center;
+}
+
+.nav-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  max-width: 640px;
+  margin: 0 auto 15px;
+}
+
+.nav-link {
+  flex: 1;
+  min-width: 140px;
+  text-align: center;
+  background: white;
+  border: 2px solid #1a1a1a;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 14px 22px;
+  color: #2c3e50;
+  font-weight: bold;
+  text-decoration: none;
+  font-size: 1rem;
+  transition: 0.15s;
+}
+
+.nav-link:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
+}
+
+/* Phone only — laptop stays untouched */
+@media (max-width: 600px) {
+  body { margin: 10px; zoom: 0.85; }
+
+  h1 { font-size: 1.25rem; }
+  h2 { font-size: 1rem; }
+  .page-subtitle { font-size: 0.9rem; }
+
+  .nav-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    max-width: 100%;
+    margin: 0 auto 10px;
+  }
+
+  .nav-link {
+    flex: initial;
+    min-width: 0;
+    padding: 8px 4px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    border-radius: 6px;
+  }
+}
+
+        .container { display: flex; flex-direction: column; gap: 25px; max-width: 1300px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .plane-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-top: 14px; }
+        .plane-stat { text-align: center; }
+        .plane-stat-label { display: block; font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+        .plane-stat-value { display: block; font-size: 1.3rem; font-weight: bold; color: #2c3e50; margin-top: 4px; }
+        .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .chart-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .current-val { font-size: 1.5rem; font-weight: bold; margin-bottom: 10px; color: #2c3e50; }
+        canvas { width: 100% !important; height: 200px !important; }
+        .full-width-chart { grid-column: 1 / -1; }
+        .full-width-chart canvas { height: 280px !important; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="text-align:center;margin-bottom:15px;">
+        {% include "partials/header.html" %}
+    </div>
+    <div class="nav-bar">
+        <a href="/" class="nav-link">Dashboard</a>
+        <a href="/bird-models" class="nav-link">Bird Models</a>
+        <a href="/dueling-models" class="nav-link">Dueling Models</a>
+        <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
+        <a href="/history" class="nav-link">Project History</a>
+        <a href="/analytics" class="nav-link">Analytics</a>
+    </div>
+    <div style="text-align:center;">
+        <h1 style="margin:0;color:#2c3e50;">Planes Detected</h1>
+        <p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Aircraft passing within range of the station, decoded from ADS-B transponder broadcasts by an RTL-SDR receiver — the same kind of technology air traffic controllers use, just homebrew.</p>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-top:0;">Last Plane Detected</h2>
+        <div class="plane-stats">
+            <div class="plane-stat">
+                <span class="plane-stat-label">Callsign</span>
+                <span class="plane-stat-value">{{ last_plane.callsign }}</span>
+            </div>
+            <div class="plane-stat">
+                <span class="plane-stat-label">Aircraft</span>
+                <span class="plane-stat-value">{{ last_plane.type_name }}</span>
+            </div>
+            <div class="plane-stat">
+                <span class="plane-stat-label">Altitude</span>
+                <span class="plane-stat-value">{{ last_plane.altitude_ft }} ft</span>
+            </div>
+            <div class="plane-stat">
+                <span class="plane-stat-label">Heading</span>
+                <span class="plane-stat-value">{{ last_plane.heading_deg }}&deg; {{ last_plane.heading_compass }}</span>
+            </div>
+            <div class="plane-stat">
+                <span class="plane-stat-label">Ground Speed</span>
+                <span class="plane-stat-value">{{ last_plane.ground_speed_kt }} kt</span>
+            </div>
+            <div class="plane-stat">
+                <span class="plane-stat-label">Seen</span>
+                <span class="plane-stat-value">{{ last_plane.seen_ago }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <div class="chart-card">
+            <h3>Planes Detected Today</h3>
+            <div class="current-val">{{ daily.total_today }}</div>
+        </div>
+
+        <div class="chart-card">
+            <h3>Highest Altitude Today</h3>
+            <div class="current-val">{{ daily.max_altitude_today }} ft</div>
+        </div>
+
+        <div class="chart-card">
+            <h3>Most Common Aircraft Today</h3>
+            <div class="current-val" style="font-size:1.1rem;">{{ daily.most_common_type }}</div>
+        </div>
+
+        <div class="chart-card" style="background:#0d1b2a;">
+            <h3 style="color:#e8e8e8;">Heading</h3>
+            <div id="radarDial"></div>
+            <div style="color:#7fd8ff;font-size:0.8rem;margin-top:8px;">
+                {{ last_plane.heading_deg }}&deg; {{ last_plane.heading_compass }} &middot; {{ last_plane.callsign }}
+            </div>
+        </div>
+
+        <div class="chart-card full-width-chart">
+            <h3>Planes Detected Per Hour (Last 24h)</h3>
+            <canvas id="planesChart"></canvas>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    (function() {
+        const cx = 90, cy = 90, r = 75;
+        const headingDeg = {{ last_plane.heading_deg }};
+
+        // 0deg = up (North), increasing clockwise -- same rotation convention
+        // as the Daylight Dial's pctToXY, just parameterized in degrees
+        // instead of percent-of-day.
+        function polar(deg, radius) {
+            const rad = (deg - 90) * Math.PI / 180;
+            return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
+        }
+
+        const [nx, ny] = polar(headingDeg, r - 8);
+
+        const ticks = [0, 90, 180, 270].map(deg => {
+            const [x1, y1] = polar(deg, r);
+            const [x2, y2] = polar(deg, r - 10);
+            return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#7fd8ff" stroke-width="1.5"/>`;
+        }).join('');
+
+        const labels = [[0, 'N'], [90, 'E'], [180, 'S'], [270, 'W']].map(([deg, label]) => {
+            const [x, y] = polar(deg, r - 22);
+            return `<text x="${x}" y="${y}" font-size="11" fill="#7fd8ff" text-anchor="middle" dominant-baseline="middle">${label}</text>`;
+        }).join('');
+
+        const svg = `
+        <svg viewBox="0 0 180 180" width="180" height="180" style="margin:0 auto;display:block;">
+            <circle cx="${cx}" cy="${cy}" r="${r}" fill="#16233a" stroke="#274b6d" stroke-width="2"/>
+            ${ticks}
+            ${labels}
+            <line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="#ff9f43" stroke-width="2.5"/>
+            <circle cx="${nx}" cy="${ny}" r="5" fill="#7fd8ff" stroke="#e8e8e8" stroke-width="1.5">
+                <animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite"/>
+            </circle>
+            <circle cx="${cx}" cy="${cy}" r="3" fill="#e8e8e8"/>
+        </svg>`;
+        document.getElementById('radarDial').innerHTML = svg;
+    })();
+
+    const planeLabels = {{ daily.hour_labels | tojson }};
+    const planeValues = {{ daily.hourly_counts | tojson }};
+    new Chart(document.getElementById('planesChart'), {
+        type: 'line',
+        data: {
+            labels: planeLabels,
+            datasets: [{ label: 'Planes Detected', data: planeValues, borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.1)', fill: true }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: { type: 'category', ticks: { autoSkip: false } },
+                y: { min: 0, ticks: { stepSize: 5 } }
+            }
+        }
+    });
+</script>
+</body>
+</html>
