@@ -214,7 +214,7 @@ h2 {
         const tbody = document.getElementById('recentTableBody');
         if (!tbody) return;
         if (!recentState.length) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:20px 10px;">Nothing within 7 miles in the last 30 minutes.<br>Most air traffic cruises well outside that range — this is expected, not broken.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:20px 10px;">Nothing within 7 miles in the last 12 hours.<br>Most air traffic cruises well outside that range — this is expected, not broken.</td></tr>';
             return;
         }
         tbody.innerHTML = recentState.map(function(row) {

@@ -106,7 +106,7 @@ AIRCRAFT_TYPES_PATH = "/home/david/birdnet/data/aircraft_types.json"  # from scr
 AIRCRAFT_TYPE_NAMES_PATH = "/home/david/birdnet/data/aircraft_type_names.json"  # from scripts/build_aircraft_type_db.py -- type_designator -> human name
 PLANES_DB_FILE = "/home/david/birdnet/data/planes.db"
 PLANES_POLL_INTERVAL_SECONDS = 20
-RECENT_DETECTIONS_WINDOW_MINUTES = 30  # /api/planes-live history table: a time window, not a row count, so a busy burst can't truncate it to a few minutes
+RECENT_DETECTIONS_WINDOW_MINUTES = 720  # 12 hours -- /api/planes-live history table: a time window, not a row count, so a busy burst can't truncate it to a few minutes
 NO_CALLSIGN_LABEL = "(no callsign)"  # shown instead of a raw ICAO hex when flight/registration are both blank -- a bare hex looks enough like a real callsign to mislead
 DISPLAY_RANGE_MI = 7.0  # live radar/table are narrowed to this 3D slant range; the poll loop below still logs every aircraft regardless of distance
 
@@ -150,9 +150,25 @@ def _init_planes_db():
             alt_baro INTEGER,
             baro_rate INTEGER,
             gs REAL,
-            rssi REAL
+            rssi REAL,
+            min_distance_mi REAL
         )
     """)
+    # CREATE TABLE IF NOT EXISTS above is a no-op against a table that
+    # already exists from before min_distance_mi was added, so backfill the
+    # column by hand for older DBs. Existing rows get NULL, which is the
+    # correct "unknown" state -- the Recent Detections query's
+    # min_distance_mi <= DISPLAY_RANGE_MI filter already excludes NULL rows,
+    # same as _within_display_range()'s own None-excludes rule. Any row
+    # that's still actively tracked gets min_distance_mi backfilled from its
+    # current distance on its next poll (see run_planes_poll_loop).
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(plane_detections)").fetchall()}
+    if "min_distance_mi" not in existing_cols:
+        conn.execute("ALTER TABLE plane_detections ADD COLUMN min_distance_mi REAL")
+    # detected_at is range-queried on every /api/planes-live poll (recent
+    # detections window, now up to 12h) and every dashboard load (24h hourly
+    # counts) -- index it so those stay cheap as the table grows.
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_plane_detections_detected_at ON plane_detections(detected_at)")
     conn.commit()
     conn.close()
 
@@ -167,6 +183,41 @@ def _classify_flight(flight):
     if m and m.group(1) in AIRLINE_CODES:
         return True, AIRLINE_CODES[m.group(1)]
     return False, None
+
+NM_TO_MI = 1.150779448  # nautical miles -> statute miles
+FT_TO_MI = 1.0 / 5280.0  # feet -> statute miles
+
+def _slant_range_mi(r_dst_nm, alt_baro_ft):
+    """True 3D straight-line distance in statute miles: sqrt(ground^2 +
+    altitude^2), both converted to the same unit first -- ground distance
+    (r_dst, nautical miles) and altitude (alt_baro, feet) arrive in
+    different units from readsb, so a bare ground-only r_dst badly
+    understates real range for anything at cruise altitude.
+    None if either input is missing -- we'd rather exclude an aircraft from
+    the DISPLAY_RANGE_MI filter than guess whether it's actually in range
+    without real altitude data.
+
+    Defined up here (rather than down by its other display-side callers)
+    because run_planes_poll_loop() below also needs it to track
+    min_distance_mi, and that loop's background thread starts at import
+    time -- if this were defined later in the module, the thread's first
+    iteration could run before that definition executes and hit a
+    NameError."""
+    if r_dst_nm is None or alt_baro_ft is None:
+        return None
+    import math
+    ground_mi = r_dst_nm * NM_TO_MI
+    alt_mi = alt_baro_ft * FT_TO_MI
+    return math.sqrt(ground_mi ** 2 + alt_mi ** 2)
+
+def _within_display_range(distance_mi):
+    """Shared by get_live_aircraft_snapshot() (radar) and the Recent
+    Detections table's inclusion rule, so both agree on the same threshold
+    and computation. The table applies this to min_distance_mi (closest
+    approach ever seen for that row) via SQL rather than calling this
+    function directly, but it's the same "distance_mi is not None and
+    distance_mi <= DISPLAY_RANGE_MI" rule either way."""
+    return distance_mi is not None and distance_mi <= DISPLAY_RANGE_MI
 
 _active_aircraft_hexes = set()
 # hex -> id of that hex's currently-open plane_detections row (the row
@@ -187,12 +238,21 @@ def run_planes_poll_loop():
     # tracking session) get their existing row's live/positional columns
     # UPDATEd in place every cycle instead of left untouched, so the stored
     # row keeps reflecting where the aircraft currently is rather than
-    # freezing at wherever it happened to be at first detection. This
-    # matters because ADS-B typically picks up aircraft well outside
-    # DISPLAY_RANGE_MI -- without this, a plane first logged far away would
-    # permanently fail the Recent Detections table's range filter even
-    # after flying directly overhead. detected_at is deliberately left
-    # alone -- it stays the original first-detection timestamp.
+    # freezing at wherever it happened to be at first detection. detected_at
+    # is deliberately left alone -- it stays the original first-detection
+    # timestamp.
+    #
+    # min_distance_mi tracks the closest approach ever seen for that row
+    # (the true 3D slant range, same computation the display side uses) --
+    # it only ever moves down, never back up as the aircraft drifts away
+    # again. This is what the Recent Detections table's range filter checks
+    # (see get_planes_live_payload), deliberately decoupled from the
+    # r_dst/alt_baro columns above: those keep reflecting the LATEST
+    # position (for the table's displayed Distance/Altitude/etc. values),
+    # while min_distance_mi remembers the best-ever distance so a plane
+    # that legitimately came within DISPLAY_RANGE_MI doesn't vanish from
+    # the table the moment it flies back out past the threshold (or
+    # flicker in/out from ordinary position noise near the boundary).
     global _active_aircraft_hexes, _active_aircraft_row_ids
     while True:
         try:
@@ -230,15 +290,19 @@ def run_planes_poll_loop():
                         # but this logging loop keeps recording every aircraft
                         # it sees regardless of distance, so the research
                         # dataset keeps growing with full-range data.
+                        # min_distance_mi starts out equal to this first
+                        # reading -- there's no earlier distance to compare
+                        # against yet.
+                        distance_mi = _slant_range_mi(a.get("r_dst"), a.get("alt_baro"))
                         cur = conn.execute(
                             """INSERT INTO plane_detections
                                (detected_at, hex, flight, registration, type_designator, description,
-                                category, is_commercial, airline_name, r_dst, r_dir, alt_baro, baro_rate, gs, rssi)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                category, is_commercial, airline_name, r_dst, r_dir, alt_baro, baro_rate, gs, rssi, min_distance_mi)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                             (now_str, hex_code, flight, registration, type_designator, description,
                              a.get("category"), int(is_commercial), airline_name,
                              a.get("r_dst"), a.get("r_dir"), a.get("alt_baro"),
-                             a.get("baro_rate"), a.get("gs"), a.get("rssi")),
+                             a.get("baro_rate"), a.get("gs"), a.get("rssi"), distance_mi),
                         )
                         _active_aircraft_row_ids[hex_code] = cur.lastrowid
                     print(f"[{time.strftime('%X')}] Planes poll -> {len(newly_seen)} newly detected ({len(current_hexes)} active)")
@@ -249,17 +313,35 @@ def run_planes_poll_loop():
                     # only the display-side query filters by distance. One
                     # UPDATE per already-active aircraft, targeted by the
                     # row id cached at insert time (no per-row SELECT).
+                    #
+                    # min_distance_mi is a ratchet: the CASE only lowers it
+                    # (new reading closer than what's stored), never raises
+                    # it back up as the aircraft moves away again, and
+                    # leaves it untouched if this reading's distance is
+                    # unknown (missing r_dst/alt_baro). min_distance_mi
+                    # IS NULL covers rows from before this column existed --
+                    # first live reading after upgrade seeds it.
+                    update_params = []
+                    for a in still_active:
+                        if a["hex"] not in _active_aircraft_row_ids:
+                            continue
+                        distance_mi = _slant_range_mi(a.get("r_dst"), a.get("alt_baro"))
+                        update_params.append((
+                            a.get("r_dst"), a.get("r_dir"), a.get("alt_baro"),
+                            a.get("baro_rate"), a.get("gs"), a.get("rssi"),
+                            distance_mi, distance_mi, distance_mi,
+                            _active_aircraft_row_ids[a["hex"]],
+                        ))
                     conn.executemany(
                         """UPDATE plane_detections
-                           SET r_dst = ?, r_dir = ?, alt_baro = ?, baro_rate = ?, gs = ?, rssi = ?
+                           SET r_dst = ?, r_dir = ?, alt_baro = ?, baro_rate = ?, gs = ?, rssi = ?,
+                               min_distance_mi = CASE
+                                   WHEN ? IS NULL THEN min_distance_mi
+                                   WHEN min_distance_mi IS NULL OR ? < min_distance_mi THEN ?
+                                   ELSE min_distance_mi
+                               END
                            WHERE id = ?""",
-                        [
-                            (a.get("r_dst"), a.get("r_dir"), a.get("alt_baro"),
-                             a.get("baro_rate"), a.get("gs"), a.get("rssi"),
-                             _active_aircraft_row_ids[a["hex"]])
-                            for a in still_active
-                            if a["hex"] in _active_aircraft_row_ids
-                        ],
+                        update_params,
                     )
 
                 conn.commit()
@@ -700,32 +782,6 @@ def get_seasonal_trend_data():
     }
 
 
-NM_TO_MI = 1.150779448  # nautical miles -> statute miles
-FT_TO_MI = 1.0 / 5280.0  # feet -> statute miles
-
-def _slant_range_mi(r_dst_nm, alt_baro_ft):
-    """True 3D straight-line distance in statute miles: sqrt(ground^2 +
-    altitude^2), both converted to the same unit first -- ground distance
-    (r_dst, nautical miles) and altitude (alt_baro, feet) arrive in
-    different units from readsb, so a bare ground-only r_dst badly
-    understates real range for anything at cruise altitude.
-    None if either input is missing -- we'd rather exclude an aircraft from
-    the DISPLAY_RANGE_MI filter than guess whether it's actually in range
-    without real altitude data."""
-    if r_dst_nm is None or alt_baro_ft is None:
-        return None
-    import math
-    ground_mi = r_dst_nm * NM_TO_MI
-    alt_mi = alt_baro_ft * FT_TO_MI
-    return math.sqrt(ground_mi ** 2 + alt_mi ** 2)
-
-def _within_display_range(distance_mi):
-    """Shared by both get_live_aircraft_snapshot() (radar) and
-    get_planes_live_payload()'s recent-detections query (table) so the two
-    can never disagree about what counts as "in range" -- same threshold,
-    same computation, used identically in both places."""
-    return distance_mi is not None and distance_mi <= DISPLAY_RANGE_MI
-
 def _live_aircraft_entry(plane):
     """Minimal per-aircraft radar entry: hex (trail key), callsign (blip
     label), and position (ground_distance_mi/r_dir_deg) for plotting -- all
@@ -806,21 +862,34 @@ def get_hourly_plane_counts():
 def get_planes_live_payload():
     """Single-response payload for the /api/planes-live poll: every aircraft
     currently visible within DISPLAY_RANGE_MI (for the radar), the last
-    RECENT_DETECTIONS_WINDOW_MINUTES of logged rows that were also within
-    DISPLAY_RANGE_MI at detection time (for the recent-detections table),
-    and hourly counts (for the trend chart, NOT range-filtered -- it's a
-    long-run activity trend, not a "what's nearby" view) -- everything the
-    frontend's 5-second refresh needs to update the whole page in one round
-    trip. No day-total figure here -- the "Planes Logged Today" stat card
-    that used it was removed.
+    RECENT_DETECTIONS_WINDOW_MINUTES of logged rows that ever came within
+    DISPLAY_RANGE_MI at some point during tracking (for the recent-detections
+    table), and hourly counts (for the trend chart, NOT range-filtered --
+    it's a long-run activity trend, not a "what's nearby" view) --
+    everything the frontend's 5-second refresh needs to update the whole
+    page in one round trip. No day-total figure here -- the "Planes Logged
+    Today" stat card that used it was removed.
 
-    The radar (aircraft) and table (recent) apply the identical
-    _within_display_range() threshold to the identical _slant_range_mi()
-    computation, so they can never disagree about what's "in range" --
-    the only reason they can still show a different aircraft is that
-    aircraft is a live snapshot (right now) and recent is a time-windowed
-    detection history (whenever each row was logged), which are genuinely
-    different questions even under the same distance rule."""
+    Note this function reads only from plane_detections (the logged
+    history) plus the live aircraft.json snapshot via
+    get_live_aircraft_snapshot() -- it has no other state, so the radar
+    (aircraft) is unaffected by anything below.
+
+    The radar (aircraft) filters live positions by _within_display_range()
+    on each aircraft's current distance. The table (recent) filters by
+    min_distance_mi -- the closest approach ever recorded for that row,
+    maintained by run_planes_poll_loop -- rather than the row's current/
+    latest distance. This is deliberate: with run_planes_poll_loop
+    refreshing r_dst/alt_baro on every poll, filtering the table on the
+    LATEST distance would make a row flicker out of the table the moment a
+    plane that had flown within range drifts back out past
+    DISPLAY_RANGE_MI (or flicker in/out near the boundary from ordinary
+    position noise), even though it was legitimately nearby moments
+    earlier. Filtering on min_distance_mi instead means a row stays
+    eligible for the rest of its tracking session once it's ever come
+    within range, while the columns it displays (distance/altitude/speed)
+    still reflect the LATEST reading -- inclusion and display are
+    deliberately decoupled here."""
     aircraft = get_live_aircraft_snapshot()
     hourly = get_hourly_plane_counts()
 
@@ -830,16 +899,19 @@ def get_planes_live_payload():
                is_commercial, airline_name, r_dst, gs, alt_baro
         FROM plane_detections
         WHERE detected_at >= datetime('now', 'localtime', ?)
+          AND min_distance_mi <= ?
         ORDER BY id DESC
-    """, (f"-{RECENT_DETECTIONS_WINDOW_MINUTES} minutes",)).fetchall()
+    """, (f"-{RECENT_DETECTIONS_WINDOW_MINUTES} minutes", DISPLAY_RANGE_MI)).fetchall()
     conn.close()
 
     recent = []
     for (detected_at, hex_code, flight, registration, type_designator, description,
          is_commercial, airline_name, r_dst, gs, alt_baro) in recent_rows:
+        # Latest distance, for display only -- inclusion was already
+        # decided by the SQL filter above on min_distance_mi. This can be
+        # None if the aircraft's most recent poll happened to be missing
+        # r_dst/alt_baro; the frontend already renders that as "--".
         distance_mi = _slant_range_mi(r_dst, alt_baro)
-        if not _within_display_range(distance_mi):
-            continue
         try:
             detected_epoch = int(datetime.strptime(detected_at, "%Y-%m-%d %H:%M:%S").timestamp())
         except ValueError:
@@ -853,7 +925,7 @@ def get_planes_live_payload():
             "airline_name": airline_name,
             "type_name": description or type_designator or "Unknown aircraft",
             "altitude_ft": alt_baro,
-            "distance_mi": round(distance_mi, 1),
+            "distance_mi": round(distance_mi, 1) if distance_mi is not None else None,
             "ground_speed_kt": round(gs) if gs is not None else None,
         })
 
