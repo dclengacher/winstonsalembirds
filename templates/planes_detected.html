@@ -175,8 +175,11 @@ h2 {
     const POLL_INTERVAL_MS = 5000;
     // Must match DISPLAY_RANGE_MI in app/main.py -- the backend already
     // filters both `aircraft` and `recent` to this radius (true 3D slant
-    // range), this is just the radar's own plotting scale.
-    const MAX_RANGE_MI = 5;
+    // range), this is just the radar's own plotting scale. Ground distance
+    // (what's actually plotted, see planeCanvasPos) is always <= slant
+    // range, so anything that passes the backend filter is guaranteed to
+    // land inside this ring.
+    const MAX_RANGE_MI = 7;
     const TRAIL_MAX_POINTS = 6;
     const RADAR_VIEWBOX = 340;
     const cx = RADAR_VIEWBOX / 2, cy = RADAR_VIEWBOX / 2, r = RADAR_VIEWBOX / 2 - 30;
@@ -211,7 +214,7 @@ h2 {
         const tbody = document.getElementById('recentTableBody');
         if (!tbody) return;
         if (!recentState.length) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:20px 10px;">Nothing within 5 miles in the last 30 minutes.<br>Most air traffic cruises well outside that range — this is expected, not broken.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:20px 10px;">Nothing within 7 miles in the last 30 minutes.<br>Most air traffic cruises well outside that range — this is expected, not broken.</td></tr>';
             return;
         }
         tbody.innerHTML = recentState.map(function(row) {
@@ -237,10 +240,15 @@ h2 {
     }
 
     function planeCanvasPos(p) {
-        if (p.distance_mi === null || p.distance_mi === undefined || p.r_dir_deg === null || p.r_dir_deg === undefined) {
+        // Radar position uses ground_distance_mi (2D ground-track distance),
+        // NOT distance_mi (3D slant range) -- a standard radar plots ground
+        // position, so a plane directly overhead at altitude belongs near
+        // the center of the scope, not out near the edge just because its
+        // slant range (mostly altitude) is large.
+        if (p.ground_distance_mi === null || p.ground_distance_mi === undefined || p.r_dir_deg === null || p.r_dir_deg === undefined) {
             return null;
         }
-        const dist = Math.min(p.distance_mi / MAX_RANGE_MI, 1) * r;
+        const dist = Math.min(p.ground_distance_mi / MAX_RANGE_MI, 1) * r;
         return polar(p.r_dir_deg, dist);
     }
 
@@ -271,7 +279,7 @@ h2 {
         }).join('');
 
         // Range rings at 1/3 and 2/3 of MAX_RANGE_MI plus the outer edge
-        // (roughly 1.7, 3.3 and 5 miles), each labeled with its real mile
+        // (roughly 2.3, 4.7 and 7 miles), each labeled with its real mile
         // value for a proper radar-scope feel.
         const rings = [r / 3, (2 * r) / 3, r].map(function(radius) {
             const mi = (MAX_RANGE_MI * (radius / r)).toFixed(1);
@@ -325,8 +333,8 @@ h2 {
         const caption = document.getElementById('radarCaption');
         if (caption) {
             caption.textContent = planesState.length
-                ? planesState.length + ' aircraft within 5 miles'
-                : 'Nothing within 5 miles right now';
+                ? planesState.length + ' aircraft within 7 miles'
+                : 'Nothing within 7 miles right now';
         }
     }
 
