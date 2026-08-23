@@ -29,12 +29,21 @@ than falling into the generic skip-and-log path:
     we don't need it since we walk the whole directory tree ourselves).
     This isn't malformed data, so it's skipped silently and counted
     separately, not lumped in with genuine unresolvable-prefix skips.
-  - Known non-shard files: files.js (confirmed -- parses to a JSON list,
-    caught by the isinstance(dict) check below) and regIcao.js (confirmed
-    -- parses to a JSON *dict*, but keyed by sequential index number
-    mapped to a bare hex string, not {hex_suffix: [reg, type, ...]} at
-    all, so the isinstance check alone doesn't catch it). Both are
-    excluded by filename up front.
+  - Non-shard reference files: db/ also holds a handful of JSON files that
+    aren't hex-keyed aircraft shards at all -- confirmed examples include
+    files.js (a JSON list), regIcao.js (index -> hex lookup),
+    airport-coords.js (airport code -> [lat, lon]), icao_aircraft_types.js
+    and icao_aircraft_types2.js (type-code -> description reference
+    tables, two different shapes), operators.js (ICAO operator code ->
+    operator info -- a separate lookup from our own airline_codes.py) and
+    ranges.js (named hex block ranges, e.g. "military"). New ones keep
+    turning up, so rather than growing a filename denylist forever, these
+    are excluded structurally: every genuine shard file observed so far
+    is named with a filename stem (before its extension) that is pure hex
+    characters only (0-9, A-F case-insensitive) -- e.g. 3.js, A8.js,
+    A95.js, AA3.js -- while every non-shard file has an actual word in
+    its name. Any file whose stem isn't pure hex is treated as a known
+    non-shard file and skipped before it's even read.
 
 We don't replicate tar1090's JS tree-walk logic to figure out the prefix
 depth -- instead, for each shard we derive a path-based prefix from its
@@ -60,8 +69,18 @@ HEX_CHARS = set("0123456789abcdefABCDEF")
 FULL_HEX_LEN = 6
 GZIP_MAGIC = b"\x1f\x8b"
 
-# Confirmed real non-shard filenames under db/ -- see module docstring.
-NON_SHARD_FILENAMES = {"files.js", "regIcao.js"}
+# Known filename extensions a shard (or a non-shard reference file) can
+# carry -- stripped off before checking whether the remaining stem is pure
+# hex. Order matters: ".json.gz" must be checked before ".gz"/".json".
+KNOWN_EXTENSIONS = (".js", ".json.gz", ".json", ".gz")
+
+# Real, confirmed non-shard filenames under db/, purely for documentation
+# in error/debug output -- the actual exclusion is structural (see
+# _is_hex_shard_filename), not a lookup against this set.
+KNOWN_NON_SHARD_FILENAME_EXAMPLES = (
+    "files.js", "regIcao.js", "airport-coords.js", "icao_aircraft_types.js",
+    "icao_aircraft_types2.js", "operators.js", "ranges.js",
+)
 
 # tar1090's own tree-navigation key, not an aircraft record -- see docstring.
 CHILDREN_KEY = "children"
@@ -84,6 +103,27 @@ def _read_shard_json(path):
     return json.loads(raw.decode("utf-8"))
 
 
+def _strip_known_extension(name):
+    """Strip one trailing known extension (see KNOWN_EXTENSIONS) off a
+    filename, leaving its stem. No-op if none match."""
+    for ext in KNOWN_EXTENSIONS:
+        if name.endswith(ext):
+            return name[: -len(ext)]
+    return name
+
+
+def _is_hex_shard_filename(filename):
+    """True if `filename`'s stem (extension stripped) is non-empty and
+    made up entirely of hex characters (0-9, A-F case-insensitive) --
+    the pattern every genuine tar1090-db shard file observed so far
+    follows (3.js, A8.js, A95.js, AA3.js, ...), as opposed to the
+    reference/lookup files living alongside them under db/, which all
+    have an actual word in their name (files.js, regIcao.js,
+    airport-coords.js, ...). See module docstring."""
+    stem = _strip_known_extension(filename)
+    return bool(stem) and all(c in HEX_CHARS for c in stem)
+
+
 def _path_prefix(root, path):
     """Derive the hex prefix a shard implies from its location on disk:
     every directory component plus the filename stem, concatenated,
@@ -95,11 +135,7 @@ def _path_prefix(root, path):
     hex-lookalike letter (a-f) inside a non-hex suffix on some other file
     must not get stitched into the prefix out of its original position."""
     rel = os.path.relpath(path, root)
-    rel_no_ext = rel
-    for ext in (".js", ".json.gz", ".json", ".gz"):
-        if rel_no_ext.endswith(ext):
-            rel_no_ext = rel_no_ext[: -len(ext)]
-            break
+    rel_no_ext = _strip_known_extension(rel)
     parts = rel_no_ext.replace(os.sep, "/").split("/")
     prefix = ""
     for part in parts:
@@ -173,11 +209,11 @@ def merge(tar1090_db_path=TAR1090_DB_PATH):
     malformed_samples = _SampleCollector()
     failed_shards = 0
     skipped_non_dict_shards = 0
-    skipped_known_non_shard_files = 0
+    skipped_non_hex_filenames = 0
 
     for shard_path in shards:
-        if os.path.basename(shard_path) in NON_SHARD_FILENAMES:
-            skipped_known_non_shard_files += 1
+        if not _is_hex_shard_filename(os.path.basename(shard_path)):
+            skipped_non_hex_filenames += 1
             continue
 
         try:
@@ -235,8 +271,8 @@ def merge(tar1090_db_path=TAR1090_DB_PATH):
             print(f"    shard={shard_path} prefix={prefix!r} key={key!r} value={value!r}")
     if skipped_children_keys:
         print(f"  ({skipped_children_keys} \"children\" tree-navigation keys skipped -- expected structure, not an error)")
-    if skipped_known_non_shard_files:
-        print(f"  ({skipped_known_non_shard_files} known non-shard file(s) excluded by name: {sorted(NON_SHARD_FILENAMES)})")
+    if skipped_non_hex_filenames:
+        print(f"  ({skipped_non_hex_filenames} non-shard reference file(s) excluded (filename stem isn't pure hex), e.g. {list(KNOWN_NON_SHARD_FILENAME_EXAMPLES)})")
     if skipped_non_dict_shards:
         print(f"  ({skipped_non_dict_shards} other file(s) skipped -- not a hex-keyed JSON object)")
     if failed_shards:
