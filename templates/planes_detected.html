@@ -108,6 +108,14 @@ h2 {
         canvas { width: 100% !important; height: 200px !important; }
         .full-width-chart { grid-column: 1 / -1; }
         .full-width-chart canvas { height: 280px !important; }
+        #radarDial { max-width: 380px; margin: 0 auto; }
+        #radarDial svg { width: 100%; height: auto; display: block; }
+        .radar-caption { color: #7fd8ff; font-size: 0.8rem; margin-top: 8px; }
+        .recent-table-wrap { overflow-x: auto; margin-top: 10px; }
+        table.planes-table { width: 100%; border-collapse: collapse; min-width: 640px; }
+        table.planes-table th, table.planes-table td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; font-size: 0.85rem; white-space: nowrap; }
+        table.planes-table th { background-color: #f8f9fa; }
+        table.planes-table td.commercial-flag { color: #888; }
     </style>
 </head>
 <body>
@@ -125,63 +133,57 @@ h2 {
     </div>
     <div style="text-align:center;">
         <h1 style="margin:0;color:#2c3e50;">Planes Detected</h1>
-        <p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Aircraft passing within range of the station, decoded from ADS-B transponder broadcasts by an RTL-SDR receiver — the same kind of technology air traffic controllers use, just homebrew.</p>
+        <p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Aircraft passing within range of the station, decoded from ADS-B transponder broadcasts by an RTL-SDR receiver — the same kind of technology air traffic controllers use, just homebrew. Updates automatically every 5 seconds.</p>
     </div>
 
     <div class="card">
         <h2 style="margin-top:0;">Last Plane Detected</h2>
         {% if last_plane %}
-        <div class="plane-stats">
+        <div class="plane-stats" id="lastPlaneStats">
             <div class="plane-stat">
                 <span class="plane-stat-label">Callsign</span>
-                <span class="plane-stat-value">{{ last_plane.callsign }}</span>
+                <span class="plane-stat-value" id="lp-callsign">{{ last_plane.callsign }}</span>
             </div>
             <div class="plane-stat">
                 <span class="plane-stat-label">Airline</span>
-                <span class="plane-stat-value">{{ last_plane.airline_name if last_plane.is_commercial else "General Aviation" }}</span>
+                <span class="plane-stat-value" id="lp-airline">{{ last_plane.airline_name if last_plane.is_commercial else "General Aviation" }}</span>
             </div>
             <div class="plane-stat">
                 <span class="plane-stat-label">Aircraft</span>
-                <span class="plane-stat-value">{{ last_plane.type_name }}</span>
+                <span class="plane-stat-value" id="lp-type">{{ last_plane.type_name }}</span>
             </div>
             <div class="plane-stat">
                 <span class="plane-stat-label">Altitude</span>
-                <span class="plane-stat-value">{{ last_plane.altitude_ft if last_plane.altitude_ft is not none else '—' }} ft</span>
+                <span class="plane-stat-value" id="lp-altitude">{{ last_plane.altitude_ft if last_plane.altitude_ft is not none else '—' }} ft</span>
             </div>
             <div class="plane-stat">
                 <span class="plane-stat-label">Distance &amp; Bearing</span>
-                <span class="plane-stat-value">{% if last_plane.r_dst_nm is not none %}{{ last_plane.r_dst_nm }} nm {{ last_plane.r_dir_compass }}{% else %}&mdash;{% endif %}</span>
+                <span class="plane-stat-value" id="lp-distance">{% if last_plane.r_dst_nm is not none %}{{ last_plane.r_dst_nm }} nm {{ last_plane.r_dir_compass }}{% else %}&mdash;{% endif %}</span>
             </div>
             <div class="plane-stat">
                 <span class="plane-stat-label">Ground Speed</span>
-                <span class="plane-stat-value">{{ last_plane.ground_speed_kt if last_plane.ground_speed_kt is not none else '—' }} kt</span>
+                <span class="plane-stat-value" id="lp-speed">{{ last_plane.ground_speed_kt if last_plane.ground_speed_kt is not none else '—' }} kt</span>
             </div>
             <div class="plane-stat">
                 <span class="plane-stat-label">Seen</span>
-                <span class="plane-stat-value">{{ last_plane.seen_ago }}</span>
+                <span class="plane-stat-value" id="lp-seen">{{ last_plane.seen_ago }}</span>
             </div>
         </div>
         {% else %}
-        <p style="text-align:center;color:#888;">No aircraft logged yet.</p>
+        <p style="text-align:center;color:#888;" id="lastPlaneEmpty">No aircraft logged yet.</p>
         {% endif %}
     </div>
 
     <div class="charts-grid">
         <div class="chart-card">
             <h3>Planes Logged Today</h3>
-            <div class="current-val">{{ daily.total_today }}</div>
+            <div class="current-val" id="dailyTotalVal">{{ daily.total_today }}</div>
         </div>
 
         <div class="chart-card" style="background:#0d1b2a;">
             <h3 style="color:#e8e8e8;">Radar</h3>
             <div id="radarDial"></div>
-            <div style="color:#7fd8ff;font-size:0.8rem;margin-top:8px;">
-                {% if last_plane and last_plane.r_dst_nm is not none %}
-                {{ last_plane.r_dst_nm }} nm {{ last_plane.r_dir_compass }} &middot; {{ last_plane.callsign }}
-                {% else %}
-                No position data
-                {% endif %}
-            </div>
+            <div class="radar-caption" id="radarCaption">Loading…</div>
         </div>
 
         <div class="chart-card full-width-chart">
@@ -189,91 +191,300 @@ h2 {
             <canvas id="planesChart"></canvas>
         </div>
     </div>
+
+    <div class="card">
+        <h2 style="margin-top:0;">Recent Detections</h2>
+        <div class="recent-table-wrap">
+            <table class="planes-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Callsign</th>
+                        <th>Airline</th>
+                        <th>Aircraft</th>
+                        <th>Altitude</th>
+                        <th>Distance</th>
+                        <th>Speed</th>
+                    </tr>
+                </thead>
+                <tbody id="recentTableBody">
+                    <tr><td colspan="7" style="text-align:center;color:#888;">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    (function() {
-        const cx = 90, cy = 90, r = 75;
-        // Nautical miles at the dial's outer ring -- a conservative guess
-        // for a backyard RTL-SDR setup; tune once real range is observed.
-        const MAX_RANGE_NM = 40;
+(function() {
+    // Scoped entirely to this page: polls its own API endpoint on its own
+    // timer and touches only elements inside this template. No other page's
+    // refresh behavior (or lack of it) is affected by this block.
+    const POLL_INTERVAL_MS = 5000;
+    const TICK_INTERVAL_MS = 1000;
+    const MAX_RANGE_NM = 40;
+    const TRAIL_MAX_POINTS = 6;
+    const RADAR_VIEWBOX = 340;
+    const cx = RADAR_VIEWBOX / 2, cy = RADAR_VIEWBOX / 2, r = RADAR_VIEWBOX / 2 - 30;
 
-        const hasPosition = {{ 'true' if last_plane and last_plane.r_dst_nm is not none else 'false' }};
-        const rDir = {{ last_plane.r_dir_deg if last_plane and last_plane.r_dir_deg is not none else 0 }};
-        const rDst = {{ last_plane.r_dst_nm if last_plane and last_plane.r_dst_nm is not none else 0 }};
-        const hasTrack = {{ 'true' if last_plane and last_plane.track_deg is not none else 'false' }};
-        const trackDeg = {{ last_plane.track_deg if last_plane and last_plane.track_deg is not none else 0 }};
+    // Seed state from the server-rendered payload so the radar, table and
+    // chart already show real data on first paint, before the first poll
+    // fires 5 seconds later.
+    let planesState = {{ live.aircraft | tojson }};
+    let recentState = {{ live.recent | tojson }};
+    let dailyTotal = {{ live.daily_total | tojson }};
+    let hourLabels = {{ live.hour_labels | tojson }};
+    let hourlyCounts = {{ live.hourly_counts | tojson }};
+    let lastPlaneState = {{ (last_plane | tojson) if last_plane else 'null' }};
 
-        // 0deg = up (North), increasing clockwise -- same rotation convention
-        // as the Daylight Dial's pctToXY, just parameterized in degrees
-        // instead of percent-of-day.
-        function polar(deg, radius) {
-            const rad = (deg - 90) * Math.PI / 180;
-            return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
+    // hex -> array of [x, y] radar-canvas points from the last few polls,
+    // for short fading trails. Purely client-side, no backend storage.
+    const trails = {};
+
+    function escapeHtml(s) {
+        if (s === null || s === undefined) return '';
+        return String(s).replace(/[&<>"']/g, function(c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    function fmtAgo(epochSeconds) {
+        if (epochSeconds === null || epochSeconds === undefined) return '—';
+        const s = Math.max(0, Math.floor(Date.now() / 1000 - epochSeconds));
+        if (s < 60) return s + 's ago';
+        if (s < 3600) return Math.floor(s / 60) + 'm ago';
+        return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm ago';
+    }
+
+    function fmtLocalTime(epochSeconds) {
+        if (epochSeconds === null || epochSeconds === undefined) return '—';
+        const d = new Date(epochSeconds * 1000);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    // --- "Last Plane Detected" card -----------------------------------
+    // renderLastPlaneCard() updates every field and is only called after
+    // real data arrives (initial render + each 5s poll). tickSeenText()
+    // runs every second but only ever recomputes the "Seen" text from the
+    // raw epoch already stored in lastPlaneState -- no network call, so it
+    // counts up continuously and can never freeze at a stale value.
+    function renderLastPlaneCard() {
+        if (!lastPlaneState) return;
+        const set = function(id, text) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        };
+        set('lp-callsign', lastPlaneState.callsign || '—');
+        set('lp-airline', lastPlaneState.is_commercial ? (lastPlaneState.airline_name || 'Commercial') : 'General Aviation');
+        set('lp-type', lastPlaneState.type_name || 'Unknown aircraft');
+        set('lp-altitude', (lastPlaneState.altitude_ft !== null && lastPlaneState.altitude_ft !== undefined ? lastPlaneState.altitude_ft : '—') + ' ft');
+        set('lp-distance', lastPlaneState.r_dst_nm !== null && lastPlaneState.r_dst_nm !== undefined
+            ? lastPlaneState.r_dst_nm + ' nm ' + (lastPlaneState.r_dir_compass || '')
+            : '—');
+        set('lp-speed', (lastPlaneState.ground_speed_kt !== null && lastPlaneState.ground_speed_kt !== undefined ? lastPlaneState.ground_speed_kt : '—') + ' kt');
+        tickSeenText();
+    }
+
+    function tickSeenText() {
+        if (!lastPlaneState) return;
+        const el = document.getElementById('lp-seen');
+        if (el) el.textContent = fmtAgo(lastPlaneState.last_seen_epoch);
+    }
+
+    // --- "Planes Logged Today" ------------------------------------------
+    function renderDailyTotal() {
+        const el = document.getElementById('dailyTotalVal');
+        if (el) el.textContent = dailyTotal;
+    }
+
+    // --- Recent Detections table -----------------------------------------
+    function renderRecentTable() {
+        const tbody = document.getElementById('recentTableBody');
+        if (!tbody) return;
+        if (!recentState.length) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;">No detections logged yet today.</td></tr>';
+            return;
         }
+        tbody.innerHTML = recentState.map(function(row) {
+            return '<tr>' +
+                '<td>' + fmtLocalTime(row.detected_at_epoch) + '</td>' +
+                '<td>' + escapeHtml(row.callsign) + '</td>' +
+                '<td>' + escapeHtml(row.is_commercial ? (row.airline_name || 'Commercial') : 'General Aviation') + '</td>' +
+                '<td>' + escapeHtml(row.type_name) + '</td>' +
+                '<td>' + (row.altitude_ft !== null && row.altitude_ft !== undefined ? row.altitude_ft + ' ft' : '—') + '</td>' +
+                '<td>' + (row.r_dst_nm !== null && row.r_dst_nm !== undefined ? row.r_dst_nm + ' nm' : '—') + '</td>' +
+                '<td>' + (row.ground_speed_kt !== null && row.ground_speed_kt !== undefined ? row.ground_speed_kt + ' kt' : '—') + '</td>' +
+                '</tr>';
+        }).join('');
+    }
 
-        const ticks = [0, 90, 180, 270].map(deg => {
-            const [x1, y1] = polar(deg, r);
-            const [x2, y2] = polar(deg, r - 10);
-            return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#7fd8ff" stroke-width="1.5"/>`;
+    // --- Radar --------------------------------------------------------
+    // 0deg = up (North), increasing clockwise -- same rotation convention
+    // as the Daylight Dial's pctToXY, just parameterized in degrees
+    // instead of percent-of-day.
+    function polar(deg, radius) {
+        const rad = (deg - 90) * Math.PI / 180;
+        return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
+    }
+
+    function planeCanvasPos(p) {
+        if (p.r_dst_nm === null || p.r_dst_nm === undefined || p.r_dir_deg === null || p.r_dir_deg === undefined) {
+            return null;
+        }
+        const dist = Math.min(p.r_dst_nm / MAX_RANGE_NM, 1) * r;
+        return polar(p.r_dir_deg, dist);
+    }
+
+    function updateTrails() {
+        const currentHexes = {};
+        planesState.forEach(function(p) { currentHexes[p.hex] = true; });
+        Object.keys(trails).forEach(function(hex) {
+            if (!currentHexes[hex]) delete trails[hex];
+        });
+        planesState.forEach(function(p) {
+            const pos = planeCanvasPos(p);
+            if (!pos) return;
+            if (!trails[p.hex]) trails[p.hex] = [];
+            trails[p.hex].push(pos);
+            if (trails[p.hex].length > TRAIL_MAX_POINTS) trails[p.hex].shift();
+        });
+    }
+
+    function renderRadar() {
+        const ticks = [0, 90, 180, 270].map(function(deg) {
+            const p1 = polar(deg, r), p2 = polar(deg, r - 16);
+            return '<line x1="' + p1[0] + '" y1="' + p1[1] + '" x2="' + p2[0] + '" y2="' + p2[1] + '" stroke="#7fd8ff" stroke-width="2"/>';
         }).join('');
 
-        const labels = [[0, 'N'], [90, 'E'], [180, 'S'], [270, 'W']].map(([deg, label]) => {
-            const [x, y] = polar(deg, r - 22);
-            return `<text x="${x}" y="${y}" font-size="11" fill="#7fd8ff" text-anchor="middle" dominant-baseline="middle">${label}</text>`;
+        const labels = [[0, 'N'], [90, 'E'], [180, 'S'], [270, 'W']].map(function(pair) {
+            const p = polar(pair[0], r - 34);
+            return '<text x="' + p[0] + '" y="' + p[1] + '" font-size="16" fill="#7fd8ff" text-anchor="middle" dominant-baseline="middle">' + pair[1] + '</text>';
         }).join('');
 
-        // Concentric range rings at 1/3 and 2/3 of MAX_RANGE_NM, for a
-        // proper radar-scope look rather than a single bare circle.
-        const rings = [r / 3, (2 * r) / 3].map(radius =>
-            `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="#274b6d" stroke-width="1"/>`
-        ).join('');
+        // Range rings at 1/3 and 2/3 of MAX_RANGE_NM plus the outer edge,
+        // each labeled with its real nm value for a proper radar-scope feel.
+        const rings = [r / 3, (2 * r) / 3, r].map(function(radius) {
+            const nm = Math.round(MAX_RANGE_NM * (radius / r));
+            const labelPos = polar(135, radius);
+            return '<circle cx="' + cx + '" cy="' + cy + '" r="' + radius + '" fill="none" stroke="#274b6d" stroke-width="1"/>' +
+                '<text x="' + labelPos[0] + '" y="' + labelPos[1] + '" font-size="10" fill="#3d6a8f" text-anchor="middle">' + nm + 'nm</text>';
+        }).join('');
 
-        let planeMarker = '';
-        if (hasPosition) {
-            const dist = Math.min(rDst / MAX_RANGE_NM, 1) * r;
-            const [px, py] = polar(rDir, dist);
-            let trackLine = '';
-            if (hasTrack) {
-                const [tx, ty] = polar(trackDeg, Math.min(dist + 14, r));
-                trackLine = `<line x1="${px}" y1="${py}" x2="${tx}" y2="${ty}" stroke="#ff9f43" stroke-width="2"/>`;
+        // Rotating sweep wedge -- a fading gradient slice spun continuously
+        // via animateTransform, the classic radar-scope sweep line.
+        const sweep =
+            '<defs><linearGradient id="sweepGrad" x1="0%" y1="50%" x2="100%" y2="50%">' +
+            '<stop offset="0%" stop-color="#7fd8ff" stop-opacity="0"/>' +
+            '<stop offset="100%" stop-color="#7fd8ff" stop-opacity="0.35"/>' +
+            '</linearGradient></defs>' +
+            '<path d="M ' + cx + ' ' + cy + ' L ' + (cx + r) + ' ' + (cy - r * 0.26) + ' A ' + r + ' ' + r + ' 0 0 1 ' + (cx + r) + ' ' + (cy + r * 0.26) + ' Z" fill="url(#sweepGrad)">' +
+            '<animateTransform attributeName="transform" type="rotate" from="0 ' + cx + ' ' + cy + '" to="360 ' + cx + ' ' + cy + '" dur="4s" repeatCount="indefinite"/>' +
+            '</path>';
+
+        const trailLines = Object.keys(trails).map(function(hex) {
+            const pts = trails[hex];
+            if (pts.length < 2) return '';
+            let segs = '';
+            for (let i = 1; i < pts.length; i++) {
+                const opacity = (i / pts.length) * 0.5;
+                segs += '<line x1="' + pts[i - 1][0] + '" y1="' + pts[i - 1][1] + '" x2="' + pts[i][0] + '" y2="' + pts[i][1] + '" stroke="#7fd8ff" stroke-width="2" stroke-opacity="' + opacity.toFixed(2) + '"/>';
             }
-            planeMarker = `
-                <line x1="${cx}" y1="${cy}" x2="${px}" y2="${py}" stroke="#274b6d" stroke-width="1" stroke-dasharray="2,2"/>
-                ${trackLine}
-                <circle cx="${px}" cy="${py}" r="5" fill="#7fd8ff" stroke="#e8e8e8" stroke-width="1.5">
-                    <animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite"/>
-                </circle>`;
-        }
+            return segs;
+        }).join('');
 
-        const svg = `
-        <svg viewBox="0 0 180 180" width="180" height="180" style="margin:0 auto;display:block;">
-            <circle cx="${cx}" cy="${cy}" r="${r}" fill="#16233a" stroke="#274b6d" stroke-width="2"/>
-            ${rings}
-            ${ticks}
-            ${labels}
-            ${planeMarker}
-            <circle cx="${cx}" cy="${cy}" r="3" fill="#e8e8e8"/>
-        </svg>`;
+        const blips = planesState.map(function(p) {
+            const pos = planeCanvasPos(p);
+            if (!pos) return '';
+            const label = escapeHtml(p.callsign || p.hex || '');
+            return '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="5" fill="#7fd8ff" stroke="#e8e8e8" stroke-width="1.5">' +
+                '<animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite"/>' +
+                '</circle>' +
+                '<text x="' + pos[0] + '" y="' + (pos[1] - 10) + '" font-size="11" fill="#e8e8e8" text-anchor="middle">' + label + '</text>';
+        }).join('');
+
+        const svg =
+            '<svg viewBox="0 0 ' + RADAR_VIEWBOX + ' ' + RADAR_VIEWBOX + '">' +
+            '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#16233a" stroke="#274b6d" stroke-width="2"/>' +
+            rings + sweep + ticks + labels + trailLines + blips +
+            '<circle cx="' + cx + '" cy="' + cy + '" r="3.5" fill="#e8e8e8"/>' +
+            '</svg>';
         document.getElementById('radarDial').innerHTML = svg;
-    })();
 
-    const planeLabels = {{ daily.hour_labels | tojson }};
-    const planeValues = {{ daily.hourly_counts | tojson }};
-    new Chart(document.getElementById('planesChart'), {
-        type: 'line',
-        data: {
-            labels: planeLabels,
-            datasets: [{ label: 'Planes Detected', data: planeValues, borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.1)', fill: true }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            scales: {
-                x: { type: 'category', ticks: { autoSkip: false } },
-                y: { min: 0, ticks: { stepSize: 5 } }
-            }
+        const caption = document.getElementById('radarCaption');
+        if (caption) {
+            caption.textContent = planesState.length
+                ? planesState.length + ' aircraft in range'
+                : 'No aircraft in range';
         }
-    });
+    }
+
+    // --- Trend chart ----------------------------------------------------
+    let planesChart = null;
+    function initChart() {
+        planesChart = new Chart(document.getElementById('planesChart'), {
+            type: 'line',
+            data: {
+                labels: hourLabels,
+                datasets: [{ label: 'Planes Detected', data: hourlyCounts, borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.1)', fill: true }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { type: 'category', ticks: { autoSkip: false } },
+                    y: { min: 0, ticks: { stepSize: 5 } }
+                }
+            }
+        });
+    }
+    function renderChart() {
+        if (!planesChart) return;
+        planesChart.data.labels = hourLabels;
+        planesChart.data.datasets[0].data = hourlyCounts;
+        planesChart.update();
+    }
+
+    function renderAll() {
+        renderLastPlaneCard();
+        renderDailyTotal();
+        renderRecentTable();
+        updateTrails();
+        renderRadar();
+        renderChart();
+    }
+
+    // --- Poll loop --------------------------------------------------------
+    // Full-payload refresh every 5s: pulls live aircraft positions, the
+    // day's running total, the recent-detections history and hourly counts
+    // in one request, then repaints everything in place -- no page reload.
+    function poll() {
+        fetch('/api/planes-live')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                planesState = data.aircraft || [];
+                recentState = data.recent || [];
+                dailyTotal = data.daily_total || 0;
+                hourLabels = data.hour_labels || [];
+                hourlyCounts = data.hourly_counts || [];
+                if (planesState.length) {
+                    // Most recently heard-from aircraft (smallest "seen" age),
+                    // not nearest -- matches the server's own selection logic.
+                    lastPlaneState = planesState.reduce(function(a, b) {
+                        return a.last_seen_epoch > b.last_seen_epoch ? a : b;
+                    });
+                }
+                // If nothing is currently visible, keep showing the last known
+                // plane rather than blanking the card -- same no-idle-state
+                // contract as the server-rendered version.
+                renderAll();
+            })
+            .catch(function(err) { console.error('planes-live poll failed:', err); });
+    }
+
+    initChart();
+    renderAll();
+    setInterval(poll, POLL_INTERVAL_MS);
+    setInterval(tickSeenText, TICK_INTERVAL_MS);
+})();
 </script>
 </body>
 </html>
