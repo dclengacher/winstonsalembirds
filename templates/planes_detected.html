@@ -108,10 +108,10 @@ h2 {
         .radar-caption { color: #7fd8ff; font-size: 0.8rem; margin-top: 8px; }
         .recent-table-wrap { overflow-x: auto; margin-top: 10px; }
         /* Fixed layout so the per-column widths below actually hold once the
-           "Closest Distance" column is added -- the first three columns are
-           trimmed ~15% and "Aircraft" ~30% from their old natural share to
-           make room, and the long text columns (Airline, Aircraft) now
-           ellipsize instead of forcing the table wider. */
+           "Closest" column is added -- the first three columns are trimmed
+           ~15% and "Aircraft" ~30% from their old natural share to make
+           room, and the long text columns (Airline, Aircraft) now ellipsize
+           instead of forcing the table wider. */
         table.planes-table { width: 100%; border-collapse: collapse; min-width: 760px; table-layout: fixed; }
         table.planes-table th, table.planes-table td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; font-size: 0.85rem; }
         table.planes-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -119,10 +119,10 @@ h2 {
         table.planes-table col.c-time    { width: 11%; }
         table.planes-table col.c-call    { width: 10%; }
         table.planes-table col.c-airline { width: 15%; }
-        table.planes-table col.c-aircraft{ width: 16%; }
+        table.planes-table col.c-aircraft{ width: 18%; }
         table.planes-table col.c-alt     { width: 12%; }
         table.planes-table col.c-dist    { width: 12%; }
-        table.planes-table col.c-closest { width: 12%; }
+        table.planes-table col.c-closest { width: 10%; }
         table.planes-table col.c-speed   { width: 12%; }
         table.planes-table td.commercial-flag { color: #888; }
     </style>
@@ -174,7 +174,7 @@ h2 {
                         <th>Aircraft</th>
                         <th>Altitude</th>
                         <th>Distance</th>
-                        <th>Closest Distance</th>
+                        <th>Closest</th>
                         <th>Speed</th>
                     </tr>
                 </thead>
