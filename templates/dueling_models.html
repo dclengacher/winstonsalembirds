@@ -103,7 +103,7 @@ h2 {
         .verdict-lead { background: #e8f5e9; border-left: 4px solid #4a7c3f; }
         .legend-row { display: flex; gap: 20px; font-size: 0.85rem; margin: 10px 0 4px; }
         .legend-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
-        canvas { max-height: 320px; }
+        .chart-wrap { position: relative; height: 340px; width: 100%; }
         .model-compare { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; }
         .model-panel { flex: 1; min-width: 280px; background: #fafbfc; border-radius: 8px; padding: 16px; }
         .model-panel h3 { margin: 0 0 2px; color: #2c3e50; font-size: 1.05rem; }
@@ -181,7 +181,7 @@ h2 {
             <span><span class="legend-swatch" style="background:#1a4a6e;"></span>Bayesian (quadratic curve)</span>
             <span><span class="legend-swatch" style="background:#c0392b;"></span>Categorical (hour-by-hour)</span>
         </div>
-        <canvas id="duelChart"></canvas>
+        <div class="chart-wrap"><canvas id="duelChart"></canvas></div>
         <p style="margin-top:14px;color:#777;font-size:0.85rem;">Shaded bands show statistical uncertainty (± 1 standard error). When the bands overlap, the two models are statistically indistinguishable that night — the higher line isn't necessarily "truly" better, just noisier.</p>
     </div>
     <div class="card">
@@ -191,6 +191,12 @@ h2 {
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    // Render the canvas backing store at >=2x regardless of the display's own
+    // ratio. On Windows laptops at fractional scaling (125%/150%) devicePixelRatio
+    // is 1.25-1.5, and rendering the chart text at exactly that ratio leaves it
+    // visibly soft; rendering at 2x and downscaling stays sharp.
+    Chart.defaults.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
+
     const bayesData = {{ duel_data.bayes | tojson }};
     const catData = {{ duel_data.categorical | tojson }};
 
@@ -214,7 +220,7 @@ h2 {
     // position, not visual order. Both real line datasets go last so they draw
     // on top of both fills.
     const ctx = document.getElementById('duelChart').getContext('2d');
-    new Chart(ctx, {
+    const duelChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: bayesPoints.map(p => p.x),
@@ -291,6 +297,7 @@ h2 {
         }],
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { display: false },
@@ -301,6 +308,17 @@ h2 {
                 x: { ticks: { maxRotation: 45, minRotation: 45 } }
             }
         }
+    });
+
+    // Keep the 2x-minimum backing store after a resize / a drag between monitors
+    // with different scaling factors.
+    let _duelResizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(_duelResizeTimer);
+        _duelResizeTimer = setTimeout(() => {
+            duelChart.options.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
+            duelChart.resize();
+        }, 150);
     });
 </script>
 </body>
