@@ -745,40 +745,15 @@ def get_seasonal_trend_data():
     for row in species_rows:
         del row["_peak_idx"]
 
-    # Bars within a group are scaled against ONE shared linear max, not each
-    # species' own max -- these percentages are directly comparable across
-    # species (unlike /bird-models' curves), so a common bird's dominant week
-    # should visibly dwarf a rare bird's, not get stretched to look the same.
-    global_max = max((max(c) for c in weekly_pct.values() if c), default=0)
-
-    # If one species' peak towers over everyone else's (>=2x the next-highest
-    # peak in the window), sharing one linear scale crushes every other
-    # species into a hairline. Pull that species into its own row, scaled
-    # against its own max -- which is also the true global max, so nothing
-    # about ITS bars is distorted -- and give the remaining species their own
-    # shared linear max, so they stay honestly comparable to EACH OTHER
-    # without being squashed by the outlier. If nothing clears that 2x bar,
-    # everyone stays together on one shared scale, same as before.
-    outlier = None
-    rest_rows = species_rows
-    if species_rows and global_max > 0:
-        top_row = max(species_rows, key=lambda r: max(r["curve"]) if r["curve"] else 0)
-        others_max = max(
-            (max(r["curve"]) for r in species_rows if r is not top_row and r["curve"]),
-            default=0,
-        )
-        if others_max == 0 or global_max >= 2 * others_max:
-            outlier = top_row
-            rest_rows = [r for r in species_rows if r is not top_row]
-
-    rest_max = max((max(r["curve"]) for r in rest_rows if r["curve"]), default=0)
-
+    # The page renders this as a heatmap (one row per species, one column per
+    # week, colour = intensity). Each row is normalised client-side against its
+    # own busiest week, so there's no need for a shared cross-species scale or
+    # the old "pull the dominant species onto its own axis" special case --
+    # every species is legible regardless of how loud the loudest one is.
+    # curve values stay as each species' share of that week's total detections.
     return {
         "week_labels": [w.strftime("%-m/%-d") for w in weeks],
-        "species": rest_rows,
-        "outlier": outlier,
-        "global_max": global_max,
-        "rest_max": rest_max,
+        "species": species_rows,
     }
 
 
