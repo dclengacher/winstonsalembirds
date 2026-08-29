@@ -124,7 +124,14 @@ h2 {
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>Chart.defaults.devicePixelRatio = window.devicePixelRatio || 2;</script>
+    <script>
+    // Render the canvas backing store at >=2x regardless of the display's own
+    // ratio. On Windows laptops at fractional scaling (125%/150%) devicePixelRatio
+    // is 1.25-1.5, and letting Chart.js render at exactly that ratio leaves the
+    // axis/label text visibly soft. Rendering at 2x and letting the browser
+    // downscale is sharp at any scaling factor.
+    Chart.defaults.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
+    </script>
 </head>
 <body>
     <div style="text-align:center;margin-bottom:15px;">
@@ -259,7 +266,7 @@ h2 {
             clearTimeout(_resizeTimer);
             _resizeTimer = setTimeout(() => {
                 _allCharts.forEach(c => {
-                    c.options.devicePixelRatio = window.devicePixelRatio || 2;
+                    c.options.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
                     c.resize();
                 });
             }, 150);

@@ -107,9 +107,23 @@ h2 {
         #radarDial svg { width: 100%; height: auto; display: block; }
         .radar-caption { color: #7fd8ff; font-size: 0.8rem; margin-top: 8px; }
         .recent-table-wrap { overflow-x: auto; margin-top: 10px; }
-        table.planes-table { width: 100%; border-collapse: collapse; min-width: 640px; }
-        table.planes-table th, table.planes-table td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; font-size: 0.85rem; white-space: nowrap; }
-        table.planes-table th { background-color: #f8f9fa; }
+        /* Fixed layout so the per-column widths below actually hold once the
+           "Closest" column is added -- the first three columns are trimmed
+           ~15% and "Aircraft" ~30% from their old natural share to make
+           room, and the long text columns (Airline, Aircraft) now ellipsize
+           instead of forcing the table wider. */
+        table.planes-table { width: 100%; border-collapse: collapse; min-width: 760px; table-layout: fixed; }
+        table.planes-table th, table.planes-table td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; font-size: 0.85rem; }
+        table.planes-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        table.planes-table th { background-color: #f8f9fa; white-space: normal; }
+        table.planes-table col.c-time    { width: 11%; }
+        table.planes-table col.c-call    { width: 10%; }
+        table.planes-table col.c-airline { width: 15%; }
+        table.planes-table col.c-aircraft{ width: 18%; }
+        table.planes-table col.c-alt     { width: 12%; }
+        table.planes-table col.c-dist    { width: 12%; }
+        table.planes-table col.c-closest { width: 10%; }
+        table.planes-table col.c-speed   { width: 12%; }
         table.planes-table td.commercial-flag { color: #888; }
     </style>
 </head>
@@ -148,6 +162,10 @@ h2 {
         <h2 style="margin-top:0;">Recent Detections</h2>
         <div class="recent-table-wrap">
             <table class="planes-table">
+                <colgroup>
+                    <col class="c-time"><col class="c-call"><col class="c-airline"><col class="c-aircraft">
+                    <col class="c-alt"><col class="c-dist"><col class="c-closest"><col class="c-speed">
+                </colgroup>
                 <thead>
                     <tr>
                         <th>Time</th>
@@ -156,11 +174,12 @@ h2 {
                         <th>Aircraft</th>
                         <th>Altitude</th>
                         <th>Distance</th>
+                        <th>Closest</th>
                         <th>Speed</th>
                     </tr>
                 </thead>
                 <tbody id="recentTableBody">
-                    <tr><td colspan="7" style="text-align:center;color:#888;">Loading…</td></tr>
+                    <tr><td colspan="8" style="text-align:center;color:#888;">Loading…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -214,17 +233,20 @@ h2 {
         const tbody = document.getElementById('recentTableBody');
         if (!tbody) return;
         if (!recentState.length) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:20px 10px;">Nothing within 7 miles in the last 12 hours.<br>Most air traffic cruises well outside that range — this is expected, not broken.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;padding:20px 10px;">Nothing within 7 miles in the last 12 hours.<br>Most air traffic cruises well outside that range — this is expected, not broken.</td></tr>';
             return;
         }
         tbody.innerHTML = recentState.map(function(row) {
+            var airline = row.is_commercial ? (row.airline_name || 'Commercial') : 'General Aviation';
+            var aircraft = row.type_name || '';
             return '<tr>' +
                 '<td>' + fmtLocalTime(row.detected_at_epoch) + '</td>' +
                 '<td>' + escapeHtml(row.callsign) + '</td>' +
-                '<td>' + escapeHtml(row.is_commercial ? (row.airline_name || 'Commercial') : 'General Aviation') + '</td>' +
-                '<td>' + escapeHtml(row.type_name) + '</td>' +
+                '<td title="' + escapeHtml(airline) + '">' + escapeHtml(airline) + '</td>' +
+                '<td title="' + escapeHtml(aircraft) + '">' + escapeHtml(aircraft) + '</td>' +
                 '<td>' + (row.altitude_ft !== null && row.altitude_ft !== undefined ? row.altitude_ft + ' ft' : '—') + '</td>' +
                 '<td>' + (row.distance_mi !== null && row.distance_mi !== undefined ? row.distance_mi + ' mi' : '—') + '</td>' +
+                '<td>' + (row.closest_distance_mi !== null && row.closest_distance_mi !== undefined ? row.closest_distance_mi + ' mi' : '—') + '</td>' +
                 '<td>' + (row.ground_speed_kt !== null && row.ground_speed_kt !== undefined ? row.ground_speed_kt + ' kt' : '—') + '</td>' +
                 '</tr>';
         }).join('');

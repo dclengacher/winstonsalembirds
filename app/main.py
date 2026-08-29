@@ -896,7 +896,7 @@ def get_planes_live_payload():
     conn = sqlite3.connect(PLANES_DB_FILE)
     recent_rows = conn.execute("""
         SELECT detected_at, hex, flight, registration, type_designator, description,
-               is_commercial, airline_name, r_dst, gs, alt_baro
+               is_commercial, airline_name, r_dst, gs, alt_baro, min_distance_mi
         FROM plane_detections
         WHERE detected_at >= datetime('now', 'localtime', ?)
           AND min_distance_mi <= ?
@@ -906,7 +906,7 @@ def get_planes_live_payload():
 
     recent = []
     for (detected_at, hex_code, flight, registration, type_designator, description,
-         is_commercial, airline_name, r_dst, gs, alt_baro) in recent_rows:
+         is_commercial, airline_name, r_dst, gs, alt_baro, min_distance_mi) in recent_rows:
         # Latest distance, for display only -- inclusion was already
         # decided by the SQL filter above on min_distance_mi. This can be
         # None if the aircraft's most recent poll happened to be missing
@@ -926,6 +926,10 @@ def get_planes_live_payload():
             "type_name": description or type_designator or "Unknown aircraft",
             "altitude_ft": alt_baro,
             "distance_mi": round(distance_mi, 1) if distance_mi is not None else None,
+            # Closest approach ever recorded for this row (true 3D slant range),
+            # ratcheted down by run_planes_poll_loop -- always <= the current
+            # distance_mi above. Same filter the SQL uses to decide inclusion.
+            "closest_distance_mi": round(min_distance_mi, 1) if min_distance_mi is not None else None,
             "ground_speed_kt": round(gs) if gs is not None else None,
         })
 
