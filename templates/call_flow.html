@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Who's Calling — Winston-Salem Bird Station</title>
+    <meta name="description" content="Where the last week of bird calls came from: new winter arrivals, year-round regulars and fading summer birds, by time of day.">
+    <meta property="og:title" content="Who's Calling — Winston-Salem Bird Station">
+    <meta property="og:description" content="New arrivals, regulars and fading birds — where this week's calls came from.">
+    <meta property="og:image" content="https://winstonsalembirds.com/static/Dashboard.png">
+    <meta property="og:url" content="https://winstonsalembirds.com/call-flow">
+    <meta property="og:type" content="website">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+/* Shared site styles — single source of truth for typography + nav across all pages */
+
+body {
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+  margin: 20px;
+  background-color: #f4f6f8;
+  color: #333;
+}
+
+h1 {
+  font-size: 1.5rem;
+  color: #2c3e50;
+  text-align: center;
+  margin: 0 0 4px;
+}
+
+h2 {
+  font-size: 1.1rem;
+  color: #333;
+  text-align: center;
+  margin-top: 0;
+}
+
+.page-subtitle {
+  margin: 5px 0 0;
+  color: #666;
+  font-size: 1rem;
+  text-align: center;
+}
+
+.nav-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  max-width: 640px;
+  margin: 0 auto 15px;
+}
+
+.nav-link {
+  flex: 1;
+  min-width: 140px;
+  text-align: center;
+  background: white;
+  border: 2px solid #1a1a1a;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 14px 22px;
+  color: #2c3e50;
+  font-weight: bold;
+  text-decoration: none;
+  font-size: 1rem;
+  transition: 0.15s;
+}
+
+.nav-link:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
+}
+
+/* Phone only — laptop stays untouched */
+@media (max-width: 600px) {
+  body { margin: 10px; zoom: 0.85; }
+
+  h1 { font-size: 1.25rem; }
+  h2 { font-size: 1rem; }
+  .page-subtitle { font-size: 0.9rem; }
+
+  .nav-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    max-width: 100%;
+    margin: 0 auto 10px;
+  }
+
+  .nav-link {
+    flex: initial;
+    min-width: 0;
+    padding: 8px 4px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    border-radius: 6px;
+  }
+}
+
+        .container { display: flex; flex-direction: column; gap: 25px; max-width: 900px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .muted { color: #777; font-size: 0.85rem; }
+        #flow svg { width: 100%; height: auto; display: block; }
+        #flow text { font-family: inherit; fill: #444; font-size: 12px; }
+        #flow text.big { font-size: 14px; font-weight: bold; fill: #2c3e50; }
+        #flow text.hdr { fill: #999; font-size: 11px; }
+        #flow [data-g] { transition: opacity 0.15s; cursor: pointer; }
+        #flow svg.focus-new [data-g]:not([data-g="new"]),
+        #flow svg.focus-reg [data-g]:not([data-g="reg"]),
+        #flow svg.focus-fade [data-g]:not([data-g="fade"]) { opacity: 0.08; }
+        .legend { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; font-size: 0.8rem; color: #666; margin-top: 10px; }
+        .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -2px; margin-right: 4px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="text-align:center;margin-bottom:15px;">
+        {% include "partials/header.html" %}
+    </div>
+    <div class="nav-bar">
+        <a href="/" class="nav-link">Dashboard</a>
+        <a href="/bird-models" class="nav-link">Bird Models</a>
+        <a href="/dueling-models" class="nav-link">Dueling Models</a>
+        <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
+        <a href="/history" class="nav-link">Project History</a>
+        <a href="/analytics" class="nav-link">Analytics</a>
+        <a href="/planes-detected" class="nav-link">Nearby Aircraft</a>
+    </div>
+    <div style="text-align:center;">
+        <h1 style="margin:0;color:#2c3e50;">Who's Calling</h1>
+        <p style="margin:5px auto 0;color:#666;font-size:0.9rem;max-width:680px;">{% if data %}Every bird call the mic picked up since {{ data.since }} ({{ "{:,}".format(data.total) }} in all), traced from newcomer, regular or departing bird, to species, to time of day. Hover a color to follow just that group.{% endif %}</p>
+    </div>
+    <div class="card">
+        {% if data %}
+        <div id="flow"></div>
+        <div class="legend">
+            <span><span class="swatch" style="background:#2a78d6;"></span>New arrivals — first heard in the last 30 days</span>
+            <span><span class="swatch" style="background:#1baf7a;"></span>Regulars</span>
+            <span><span class="swatch" style="background:#eb6834;"></span>Fading out — under half its usual weekly calls</span>
+        </div>
+        {% else %}
+        <p>No detections in the last week.</p>
+        {% endif %}
+    </div>
+</div>
+{% if data %}
+<script>
+const D = {{ data | tojson }};
+const COL = {new: '#2a78d6', reg: '#1baf7a', fade: '#eb6834'};
+const GNAME = {new: 'New arrivals', reg: 'Regulars', fade: 'Fading out'};
+const ORDER = ['new', 'reg', 'fade'];
+const NS = 'http://www.w3.org/2000/svg';
+const X0 = 150, X1 = 340, X2 = 560, W = 12, TOP = 40, H = 440;
+const k = H / D.total;
+const fmt = n => n.toLocaleString();
+
+const gTot = {}, tTot = D.times.map(() => 0), tByG = D.times.map(() => ({new: 0, reg: 0, fade: 0}));
+D.species.forEach(s => gTot[s.g] = (gTot[s.g] || 0) + s.n);
+const sp = Object.fromEntries(D.species.map(s => [s.name, s]));
+D.flows.forEach(f => { tTot[f.t] += f.n; tByG[f.t][sp[f.s].g] += f.n; });
+const groups = ORDER.filter(g => gTot[g]);
+
+let y = TOP;
+D.species.forEach(s => { s.h = Math.max(s.n * k, 2); s.y = y; y += Math.max(s.h + 5, 15); });
+const yEnd = y;
+const spare = yEnd - TOP - H;
+const gPos = {}; y = TOP;
+groups.forEach(g => { gPos[g] = {y, h: gTot[g] * k}; y += gTot[g] * k + spare / Math.max(groups.length - 1, 1); });
+const tPos = []; y = TOP;
+D.times.forEach((t, i) => { tPos[i] = {y, h: tTot[i] * k}; y += tTot[i] * k + spare / (D.times.length - 1); });
+
+const svg = document.createElementNS(NS, 'svg');
+svg.setAttribute('viewBox', `0 0 700 ${Math.ceil(yEnd + 10)}`);
+svg.setAttribute('role', 'img');
+svg.setAttribute('aria-label', `Flow of ${D.total} bird calls from status group to species to time of day`);
+const el = (tag, attrs, parent = svg) => { const e = document.createElementNS(NS, tag); for (const a in attrs) e.setAttribute(a, attrs[a]); parent.appendChild(e); return e; };
+const txt = (x, y, s, cls, anchor, g) => { const t = el('text', {x, y, 'text-anchor': anchor || 'start'}); if (cls) t.setAttribute('class', cls); if (g) t.dataset.g = g; t.textContent = s; return t; };
+const rib = (x0, y0, x1, y1, h, g, op) => {
+    const m = (x0 + x1) / 2;
+    const p = el('path', {d: `M${x0},${y0} C${m},${y0} ${m},${y1} ${x1},${y1} L${x1},${y1 + h} C${m},${y1 + h} ${m},${y0 + h} ${x0},${y0 + h} Z`, fill: COL[g], 'fill-opacity': op});
+    p.dataset.g = g; return p;
+};
+
+[['Status', X0], ['Species', X1], ['Time of day', X2]].forEach(([s, x]) => txt(x + W / 2, 20, s, 'hdr', 'middle'));
+
+const gOff = Object.fromEntries(groups.map(g => [g, gPos[g].y]));
+D.species.forEach(s => { const h = s.n * k; rib(X0 + W, gOff[s.g], X1, s.y, h, s.g, 0.35); gOff[s.g] += h; });
+const tOff = tPos.map(p => p.y);
+D.species.forEach(s => {
+    let off = s.y;
+    D.times.forEach((t, i) => {
+        const f = D.flows.find(f => f.s === s.name && f.t === i);
+        if (!f) return;
+        const h = f.n * k; rib(X1 + W, off, X2, tOff[i], h, s.g, 0.2); off += h; tOff[i] += h;
+    });
+});
+
+groups.forEach(g => {
+    const {y, h} = gPos[g];
+    el('rect', {x: X0, y, width: W, height: h, rx: 2, fill: COL[g]}).dataset.g = g;
+    txt(X0 - 8, y + h / 2 - 3, GNAME[g], 'big', 'end', g);
+    txt(X0 - 8, y + h / 2 + 14, `${fmt(gTot[g])} calls · ${Math.round(100 * gTot[g] / D.total)}%`, null, 'end', g);
+});
+D.species.forEach(s => {
+    const r = el('rect', {x: X1, y: s.y, width: W, height: s.h, rx: 1, fill: COL[s.g]}); r.dataset.g = s.g;
+    const t = txt(X1 + W + 5, s.y + s.h / 2 + 4, `${s.name} · ${fmt(s.n)}`, null, 'start', s.g);
+    if (s.members.length > 1) { const tt = el('title', {}, t); tt.textContent = s.members.join(', '); }
+});
+const tLabels = [];
+D.times.forEach((t, i) => {
+    const {y, h} = tPos[i];
+    el('rect', {x: X2, y, width: W, height: h, rx: 2, fill: '#b4b2a9'});
+    txt(X2 + W + 8, y + h / 2 - 3, t.name, 'big');
+    tLabels[i] = txt(X2 + W + 8, y + h / 2 + 14, `${t.sub} · ${fmt(tTot[i])}`);
+});
+
+svg.querySelectorAll('[data-g]').forEach(e => {
+    e.addEventListener('mouseenter', () => {
+        const g = e.dataset.g;
+        svg.setAttribute('class', 'focus-' + g);
+        D.times.forEach((t, i) => tLabels[i].textContent = `${t.sub} · ${fmt(tByG[i][g])} of ${fmt(tTot[i])}`);
+    });
+});
+svg.addEventListener('mouseleave', () => {
+    svg.removeAttribute('class');
+    D.times.forEach((t, i) => tLabels[i].textContent = `${t.sub} · ${fmt(tTot[i])}`);
+});
+document.getElementById('flow').appendChild(svg);
+</script>
+{% endif %}
+</body>
+</html>
