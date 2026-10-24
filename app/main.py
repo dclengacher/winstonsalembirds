@@ -589,6 +589,10 @@ def load_mlops_data():
         "beta_dailyrain": "Rain",
         "beta_time_of_day": "Time of Day",
         "beta_time_of_day2": "Time of Day (curve)",
+        "season_day": "Season (trend)",
+        "season_day2": "Season (curve)",
+        "beta_season_day": "Season (trend)",
+        "beta_season_day2": "Season (curve)",
     }
     coef_keys = [k for k in coefficients if k not in ("Intercept", "intercept")]
     coef_labels = [FRIENDLY_NAMES.get(k, k) for k in coef_keys]
@@ -647,18 +651,18 @@ def get_bird_clock_data():
         random_fx = _json.load(f)
     with open(version_dir / "metadata.json") as f:
         meta = _json.load(f)
-    time_scale = meta["scale_params"]["time_of_day"]
-    beta_time = fixed["beta_time_of_day"]["mean"]
-    beta_time2 = fixed["beta_time_of_day2"]["mean"]
     hours = list(range(5, 21))
     species_rows = []
     for name, fx in random_fx.items():
         curve = []
         for h in hours:
-            t = (h - time_scale["mean"]) / time_scale["std"]
-            slope = beta_time + fx["time_slope_mean"]
-            slope2 = beta_time2 + fx["time2_slope_mean"]
-            linpred = fx["offset_mean"] + slope * t + slope2 * (t ** 2)
+            if "hour_curve" in fx:
+                linpred = fx["offset_mean"] + fx["hour_curve"].get(str(h), float("-inf"))
+            else:
+                t = (h - meta["scale_params"]["time_of_day"]["mean"]) / meta["scale_params"]["time_of_day"]["std"]
+                slope = fixed["beta_time_of_day"]["mean"] + fx["time_slope_mean"]
+                slope2 = fixed["beta_time_of_day2"]["mean"] + fx["time2_slope_mean"]
+                linpred = fx["offset_mean"] + slope * t + slope2 * (t ** 2)
             curve.append(_math.exp(linpred))
         total = sum(curve)
         peak_idx = curve.index(max(curve))
@@ -688,17 +692,6 @@ def get_seasonal_trend_data():
     # all-time total -- dividing by the week's total cancels out anything that
     # shifts detection volume for every species equally that week (a mic change,
     # a stretch of rainy/windy days), so it doesn't masquerade as real migration.
-    registry_path = MLOPS_MODELS_DIR / "registry.json"
-    if not registry_path.exists():
-        return None
-    with open(registry_path) as f:
-        registry = _json.load(f)
-    current = registry.get("current_production")
-    if current is None:
-        return None
-    with open(MLOPS_MODELS_DIR / current / "random_effects.json") as f:
-        random_fx = _json.load(f)
-    species_names = list(random_fx.keys())
 
     today = datetime.now().date()
     this_monday = today - timedelta(days=today.weekday())
@@ -706,6 +699,10 @@ def get_seasonal_trend_data():
     candidate_starts = [last_closed_monday - timedelta(weeks=i) for i in range(25, -1, -1)]
 
     conn = sqlite3.connect(DB_FILE)
+    species_names = [r[0] for r in conn.execute(
+        "SELECT Com_Name FROM detections_alltime WHERE Date >= ? AND Date <= ? GROUP BY Com_Name HAVING COUNT(*) >= 20",
+        (candidate_starts[0].isoformat(), (last_closed_monday + timedelta(days=6)).isoformat())
+    ).fetchall()]
     weeks = []
     weekly_pct = {name: [] for name in species_names}
     window_totals = {name: 0 for name in species_names}

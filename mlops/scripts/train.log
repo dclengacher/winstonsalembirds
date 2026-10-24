@@ -1,0 +1,15 @@
+nohup: ignoring input
+Training on 16 species, 20496 rows
+Initializing NUTS using jitter+adapt_diag...
+Multiprocess sampling (4 chains in 2 jobs)
+NUTS: [intercept, beta_tempf, beta_humidity, beta_baromrelin, beta_dailyrain, hour_effect, mu_species, sigma_species, species_offset, sigma_hour_species, hour_species, beta_season_day, beta_season_day2, sigma_day_species, b_day_species, sigma_day2_species, b_day2_species, alpha]
+Sampling 4 chains for 1_000 tune and 1_000 draw iterations (4_000 + 4_000 draws total) took 8133 seconds.
+The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
+The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
+Computing ... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
+/home/david/birdnet/mlops_venv/lib/python3.13/site-packages/arviz_stats/loo/helper_loo.py:1146: UserWarning: Estimated shape parameter of Pareto distribution is greater than 0.70 for one or more samples. You should consider using a more robust model, this is because importance sampling is less likely to work well if the marginal posterior and LOO posterior are very different. This is more likely to happen with a non-robust model and highly influential observations.
+  warnings.warn(
+Registered v78_20261013_121728
+ELPD (LOO): -13568.81644542532
+R-hat max: 1.0113777888848368
+Current production model: v78_20261013_121728
