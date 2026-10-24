@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Species Models — Winston-Salem Bird Station</title>
+    <meta name="description" content="One integrated bird model, unpacked into 20 species-specific models: daily rhythm, seasonal arc and weather response for the most-heard birds at the Winston-Salem Bird Station.">
+    <meta property="og:title" content="Species Models — Winston-Salem Bird Station">
+    <meta property="og:description" content="Daily rhythm and seasonal arc for the 20 most-heard backyard birds, unpacked from one Bayesian model.">
+    <meta property="og:image" content="https://winstonsalembirds.com/static/Dashboard.png">
+    <meta property="og:url" content="https://winstonsalembirds.com/species-models">
+    <meta property="og:type" content="website">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+/* Shared site styles — single source of truth for typography + nav across all pages */
+
+body {
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+  margin: 20px;
+  background-color: #f4f6f8;
+  color: #333;
+}
+
+h1 {
+  font-size: 1.5rem;
+  color: #2c3e50;
+  text-align: center;
+  margin: 0 0 4px;
+}
+
+h2 {
+  font-size: 1.1rem;
+  color: #333;
+  text-align: center;
+  margin-top: 0;
+}
+
+.page-subtitle {
+  margin: 5px 0 0;
+  color: #666;
+  font-size: 1rem;
+  text-align: center;
+}
+
+.nav-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  max-width: 640px;
+  margin: 0 auto 15px;
+}
+
+.nav-link {
+  flex: 1;
+  min-width: 140px;
+  text-align: center;
+  background: white;
+  border: 2px solid #1a1a1a;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 14px 22px;
+  color: #2c3e50;
+  font-weight: bold;
+  text-decoration: none;
+  font-size: 1rem;
+  transition: 0.15s;
+}
+
+.nav-link:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
+}
+
+/* Phone only — laptop stays untouched */
+@media (max-width: 600px) {
+  body { margin: 10px; zoom: 0.85; }
+
+  h1 { font-size: 1.25rem; }
+  h2 { font-size: 1rem; }
+  .page-subtitle { font-size: 0.9rem; }
+
+  .nav-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    max-width: 100%;
+    margin: 0 auto 10px;
+  }
+
+  .nav-link {
+    flex: initial;
+    min-width: 0;
+    padding: 8px 4px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    border-radius: 6px;
+  }
+}
+
+        .container { display: flex; flex-direction: column; gap: 25px; max-width: 1000px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .muted { color: #777; font-size: 0.85rem; }
+        .weather-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px; }
+        .weather-tile { border: 1px solid #e3e7eb; border-radius: 8px; padding: 12px; text-align: center; }
+        .weather-tile .big { font-size: 1.6rem; font-weight: bold; color: #2c3e50; }
+        .weather-tile .big.neg { color: #a5432a; }
+        .weather-tile .big.pos { color: #1a6e4a; }
+        .species-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+        @media (max-width: 760px) { .species-grid { grid-template-columns: 1fr; } }
+        .sp-card { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+        .sp-head { display: flex; align-items: center; gap: 12px; }
+        .sp-rank { font-size: 0.8rem; font-weight: bold; color: #999; width: 24px; }
+        .sp-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; flex: none; }
+        .sp-name { font-weight: bold; color: #2c3e50; font-size: 1rem; }
+        .sp-n { color: #999; font-size: 0.8rem; }
+        .pill { margin-left: auto; font-size: 0.75rem; font-weight: bold; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+        .pill.Rising { background: #e2f3ea; color: #1a6e4a; }
+        .pill.Fading { background: #f8e6e0; color: #a5432a; }
+        .pill.Steady { background: #eef0f3; color: #555; }
+        .sp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; }
+        .sp-stats div { background: #f7f9fb; border-radius: 6px; padding: 6px 4px; }
+        .sp-stats strong { display: block; color: #2c3e50; font-size: 1rem; }
+        .sp-stats span { color: #888; font-size: 0.72rem; }
+        .chart-label { font-size: 0.75rem; color: #888; margin: 2px 0 -4px; }
+        .chart-box { position: relative; height: 120px; }
+        details { font-size: 0.8rem; color: #555; }
+        summary { cursor: pointer; color: #0066cc; }
+        .eq { font-family: ui-monospace, Menlo, Consolas, monospace; background: #f7f9fb; border-radius: 6px; padding: 8px; margin-top: 6px; line-height: 1.6; overflow-x: auto; white-space: nowrap; }
+        .legend { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; font-size: 0.8rem; color: #666; }
+        .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -2px; margin-right: 4px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="text-align:center;margin-bottom:15px;">
+        {% include "partials/header.html" %}
+    </div>
+    <div class="nav-bar">
+        <a href="/" class="nav-link">Dashboard</a>
+        <a href="/bird-models" class="nav-link">Bird Models</a>
+        <a href="/dueling-models" class="nav-link">Dueling Models</a>
+        <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
+        <a href="/history" class="nav-link">Project History</a>
+        <a href="/analytics" class="nav-link">Analytics</a>
+    </div>
+
+    <div style="text-align:center;">
+        <h1 style="margin:0;color:#2c3e50;">Species Models</h1>
+        <p style="margin:5px auto 0;color:#666;font-size:0.9rem;max-width:720px;">One model learns from every bird at once. Here it's unpacked into a separate model for each of the 20 most-heard species: when in the day it calls, how its season is unfolding, and how weather shifts it.</p>
+    </div>
+
+    {% if data %}
+    <div class="card">
+        <h2>What weather does to every bird</h2>
+        <p class="muted" style="text-align:center;margin:0;">These effects are shared by all species — change in expected calls, holding everything else equal.</p>
+        <div class="weather-grid">
+            {% for w in data.weather %}
+            <div class="weather-tile">
+                <div class="big {{ 'pos' if w.pct > 0 else 'neg' if w.pct < 0 else '' }}">{{ '+' if w.pct > 0 }}{{ w.pct }}%</div>
+                <div>{{ w.label }}</div>
+                <div class="muted" style="font-size:0.72rem;">{{ 'clear signal' if w.is_clear else 'weak signal' }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        <details style="margin-top:14px;">
+            <summary>How a species model is rebuilt from the integrated model</summary>
+            <div class="eq">
+                log(calls/hr) = <b>intercept</b> + <b>species offset</b><br>
+                &nbsp;&nbsp;+ <b>hour curve</b> (shared hour effect + species deviation)<br>
+                &nbsp;&nbsp;+ (season slope + species slope)·d + (season curve + species curve)·d²<br>
+                &nbsp;&nbsp;+ weather terms (shared)
+            </div>
+            <p style="margin:6px 0 0;">Shared: intercept {{ data.intercept }}, season {{ data.b_day }}·d + {{ data.b_day2 }}·d². Each card below adds that species' own random effects. d = standardized day of year. Curves hold weather at its average.</p>
+        </details>
+        <div class="legend" style="margin-top:14px;">
+            <span><span class="swatch" style="background:#1a4a6e;"></span>Predicted calls by hour, today</span>
+            <span><span class="swatch" style="background:#e0893a;"></span>Model's daily expectation</span>
+            <span><span class="swatch" style="background:#9aa5b1;border-radius:50%;"></span>Actual daily detections</span>
+        </div>
+    </div>
+
+    <div class="species-grid">
+        {% for s in data.species %}
+        <div class="sp-card">
+            <div class="sp-head">
+                <span class="sp-rank">#{{ s.rank }}</span>
+                <img class="sp-thumb" data-name="{{ s.name }}" alt="{{ s.name }}"
+                     src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48'><rect width='48' height='48' rx='6' fill='%23eee'/></svg>">
+                <div>
+                    <div class="sp-name">{{ s.name }}</div>
+                    <div class="sp-n">{{ "{:,}".format(s.n_detections) }} detections</div>
+                </div>
+                <span class="pill {{ s.status }}">{{ s.status }} {{ '+' if s.weekly_change_pct > 0 }}{{ s.weekly_change_pct }}%/wk</span>
+            </div>
+            <div class="sp-stats">
+                <div><strong>{{ s.peak_hour % 12 or 12 }}{{ 'am' if s.peak_hour < 12 else 'pm' }}</strong><span>peak hour</span></div>
+                <div><strong>{{ s.pred_today }}</strong><span>calls expected today</span></div>
+                <div><strong>{{ s.season_peak }}</strong><span>model's busiest day</span></div>
+            </div>
+            <div class="chart-label">Daily rhythm (today, average weather)</div>
+            <div class="chart-box"><canvas id="hour-{{ loop.index0 }}" role="img" aria-label="{{ s.name }} predicted calls by hour, peaking at {{ s.peak_hour }}:00"></canvas></div>
+            <div class="chart-label">Season so far — model vs. actual</div>
+            <div class="chart-box"><canvas id="season-{{ loop.index0 }}" role="img" aria-label="{{ s.name }} expected and actual daily detections since July 21"></canvas></div>
+            <details>
+                <summary>This species' equation</summary>
+                <div class="eq">
+                    log(calls/hr) = {{ s.eq.base }} <span style="color:#999;">(±{{ s.eq.base_sd }})</span><br>
+                    &nbsp;&nbsp;+ hour[h]<br>
+                    &nbsp;&nbsp;{{ '+' if s.eq.s1 >= 0 else '−' }} {{ s.eq.s1|abs }}·d <span style="color:#999;">(±{{ s.eq.s1_sd }})</span>
+                    {{ '+' if s.eq.s2 >= 0 else '−' }} {{ s.eq.s2|abs }}·d² <span style="color:#999;">(±{{ s.eq.s2_sd }})</span><br>
+                    &nbsp;&nbsp;+ weather
+                </div>
+            </details>
+        </div>
+        {% endfor %}
+    </div>
+
+    <p class="muted" style="text-align:center;margin:0;">Model {{ data.version }} · fit {{ data.fit_time }} · {{ data.n_species_model }} species, {{ "{:,}".format(data.n_rows) }} species-hours{% if data.rhat_max %} · R-hat max {{ data.rhat_max }}{% endif %}. Updates whenever a new model is promoted. Seasonal curves are quadratic in day of year until a full year of data exists, so treat them as the current trend, not a forecast.</p>
+    {% else %}
+    <div class="card"><p>No seasonal model available yet.</p></div>
+    {% endif %}
+</div>
+
+{% if data %}
+<script>
+const SPECIES = {{ data.species | tojson }};
+const DAY_LABELS = {{ data.day_labels | tojson }};
+const fmtHour = h => (h % 12 || 12) + (h < 12 ? 'a' : 'p');
+const fmtDay = s => { const d = new Date(s + 'T12:00:00'); return d.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}); };
+Chart.defaults.font.size = 10;
+Chart.defaults.color = '#888';
+
+function draw(i) {
+    const s = SPECIES[i];
+    new Chart(document.getElementById('hour-' + i), {
+        type: 'bar',
+        data: { labels: s.hours.map(fmtHour), datasets: [{ data: s.hourly_today, backgroundColor: s.hours.map(h => h === s.peak_hour ? '#e0893a' : '#1a4a6e'), borderRadius: 2 }] },
+        options: { maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y.toFixed(2) + ' calls/hr' } } },
+                   scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: '#f0f0f0' }, ticks: { maxTicksLimit: 3 } } } }
+    });
+    new Chart(document.getElementById('season-' + i), {
+        data: { labels: DAY_LABELS.map(fmtDay), datasets: [
+            { type: 'scatter', data: s.daily_actual.map((v, j) => ({x: j, y: v})), backgroundColor: 'rgba(154,165,177,0.6)', pointRadius: 2, order: 2 },
+            { type: 'line', data: s.daily_pred, borderColor: '#e0893a', borderWidth: 2.5, pointRadius: 0, tension: 0.3, order: 1 }
+        ] },
+        options: { maintainAspectRatio: false, animation: false, plugins: { legend: { display: false },
+                   tooltip: { callbacks: { title: it => DAY_LABELS[it[0].dataIndex] ? fmtDay(DAY_LABELS[it[0].dataIndex]) : '',
+                                           label: c => (c.dataset.type === 'line' ? 'Expected: ' : 'Actual: ') + Math.round(c.parsed.y) } } },
+                   scales: { x: { type: 'category', grid: { display: false }, ticks: { maxTicksLimit: 5, maxRotation: 0 } },
+                             y: { beginAtZero: true, grid: { color: '#f0f0f0' }, ticks: { maxTicksLimit: 3 } } } }
+    });
+}
+
+const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if (e.isIntersecting) { draw(+e.target.dataset.i); io.unobserve(e.target); }
+}), { rootMargin: '200px' });
+document.querySelectorAll('.sp-card').forEach((el, i) => { el.dataset.i = i; io.observe(el); });
+
+document.querySelectorAll('.sp-thumb').forEach(img => {
+    const name = img.getAttribute('data-name');
+    fetch(`https://en.wikipedia.org/w/api.php?action=query&redirects=1&titles=${encodeURIComponent(name)}&prop=pageimages&format=json&pithumbsize=100&origin=*`)
+        .then(r => r.json()).then(d => {
+            const p = d.query.pages; const id = Object.keys(p)[0];
+            if (id !== "-1" && p[id] && p[id].thumbnail) img.src = p[id].thumbnail.source;
+        }).catch(() => {});
+});
+</script>
+{% endif %}
+</body>
+</html>
