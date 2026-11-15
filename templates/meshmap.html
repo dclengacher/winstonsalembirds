@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LoRa Coverage Map | Winston-Salem Birds</title>
+<meta name="description" content="Meshtastic LoRa coverage map: messages sent from the Winston-Salem bird station, green = received, red = missed.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  body { margin:0; font-family:system-ui,sans-serif; background:#111; color:#eee; }
+  header { padding:10px 16px; }
+  header h1 { margin:0; font-size:1.3em; }
+  header p { margin:4px 0 0; font-size:.9em; color:#aaa; }
+  #map { height:calc(100vh - 80px); }
+  .legend { background:#fff; color:#222; padding:6px 10px; border-radius:6px; font-size:13px; line-height:1.6; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>LoRa Coverage Map</h1>
+  <p>{{ n_ack }} received · {{ n_fail }} missed · {{ n_track }} track points · updated {{ updated }}</p>
+</header>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const station = {{ station|tojson }};
+const points = {{ points|tojson }};
+const track = {{ track|tojson }};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const map = L.map('map').setView(station, 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);
+L.marker(station).addTo(map).bindPopup('Base station (H4)');
+L.polyline(track.map(t => [t.lat, t.lon]), {color:'#3388ff', weight:2, opacity:.5}).addTo(map);
+points.forEach(p => {
+  const ok = p.status === 'ack';
+  const msg = p.msg ? esc(p.msg) : `seq ${p.seq} · ${p.time}`;
+  const sig = ok && p.snr != null ? `<br>SNR ${p.snr} dB · RSSI ${p.rssi} dBm` : '';
+  L.circleMarker([p.lat, p.lon], {
+    radius:8, color:'#000', weight:1, fillOpacity:.85,
+    fillColor: ok ? '#2ecc40' : '#ff4136', dashArray: p.est ? '3' : null
+  }).addTo(map)
+    .bindTooltip(msg)
+    .bindPopup(`<b>${ok ? 'Received' : 'Missed'}</b><br>${msg}${sig}` +
+               (p.est ? '<br><i>location estimated</i>' : ''));
+});
+const legend = L.control({position:'bottomright'});
+legend.onAdd = () => {
+  const d = L.DomUtil.create('div', 'legend');
+  d.innerHTML = '<span class="dot" style="background:#2ecc40"></span>Received<br>' +
+                '<span class="dot" style="background:#ff4136"></span>Missed<br>' +
+                '<span class="dot" style="background:#3388ff"></span>T1000 track';
+  return d;
+};
+legend.addTo(map);
+</script>
+</body>
+</html>

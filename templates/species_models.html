@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Species Models — Winston-Salem Bird Station</title>
+    <title>Bird Models — Winston-Salem Bird Station</title>
     <meta name="description" content="One integrated bird model, unpacked into 20 species-specific models: daily rhythm, seasonal arc and weather response for the most-heard birds at the Winston-Salem Bird Station.">
-    <meta property="og:title" content="Species Models — Winston-Salem Bird Station">
+    <meta property="og:title" content="Bird Models — Winston-Salem Bird Station">
     <meta property="og:description" content="Daily rhythm and seasonal arc for the 20 most-heard backyard birds, unpacked from one Bayesian model.">
     <meta property="og:image" content="https://winstonsalembirds.com/static/Dashboard.png">
-    <meta property="og:url" content="https://winstonsalembirds.com/species-models">
+    <meta property="og:url" content="https://winstonsalembirds.com/bird-models">
     <meta property="og:type" content="website">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -102,7 +102,7 @@ h2 {
         .muted { color: #777; font-size: 0.85rem; }
         .weather-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px; }
         .weather-tile { border: 1px solid #e3e7eb; border-radius: 8px; padding: 12px; text-align: center; }
-        .weather-tile .big { font-size: 1.6rem; font-weight: bold; color: #2c3e50; }
+        .weather-tile .big { font-size: 1.3rem; font-weight: bold; color: #2c3e50; }
         .weather-tile .big.neg { color: #a5432a; }
         .weather-tile .big.pos { color: #1a6e4a; }
         .species-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
@@ -137,28 +137,29 @@ h2 {
     </div>
     <div class="nav-bar">
         <a href="/" class="nav-link">Dashboard</a>
-        <a href="/bird-models" class="nav-link">Bird Models</a>
         <a href="/dueling-models" class="nav-link">Dueling Models</a>
         <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
         <a href="/history" class="nav-link">Project History</a>
         <a href="/analytics" class="nav-link">Analytics</a>
+        <a href="/call-flow" class="nav-link">Flow Decomp</a>
+        <a href="/planes-detected" class="nav-link">Planes</a>
     </div>
 
     <div style="text-align:center;">
-        <h1 style="margin:0;color:#2c3e50;">Species Models</h1>
+        <h1 style="margin:0;color:#2c3e50;">Bird Models</h1>
         <p style="margin:5px auto 0;color:#666;font-size:0.9rem;max-width:720px;">One model learns from every bird at once. Here it's unpacked into a separate model for each of the 20 most-heard species: when in the day it calls, how its season is unfolding, and how weather shifts it.</p>
     </div>
 
     {% if data %}
     <div class="card">
         <h2>What weather does to every bird</h2>
-        <p class="muted" style="text-align:center;margin:0;">These effects are shared by all species — change in expected calls, holding everything else equal.</p>
+        <p class="muted" style="text-align:center;margin:0;">How much more or less birds call when the weather changes. Same for every species.</p>
         <div class="weather-grid">
             {% for w in data.weather %}
             <div class="weather-tile">
-                <div class="big {{ 'pos' if w.pct > 0 else 'neg' if w.pct < 0 else '' }}">{{ '+' if w.pct > 0 }}{{ w.pct }}%</div>
+                <div class="big {{ 'pos' if w.pct > 0 else 'neg' if w.pct < 0 else '' }}">{{ w.pct|abs }}% {{ 'more' if w.pct > 0 else 'fewer' }} calls</div>
                 <div>{{ w.label }}</div>
-                <div class="muted" style="font-size:0.72rem;">{{ 'clear signal' if w.is_clear else 'weak signal' }}</div>
+                <div class="muted" style="font-size:0.72rem;">{{ 'Confident' if w.is_clear else 'Not sure yet — could be chance' }}</div>
             </div>
             {% endfor %}
         </div>

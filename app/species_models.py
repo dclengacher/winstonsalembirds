@@ -23,7 +23,7 @@ import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, redirect
 
 bp = Blueprint("species_models", __name__)
 
@@ -35,10 +35,10 @@ TOP_N = 20
 
 # Readable weather nudges: (feature, step in raw units, label)
 WEATHER_STEPS = [
-    ("tempf", 10.0, "10°F warmer"),
-    ("humidity", 10.0, "10 points more humid"),
-    ("baromrelin", 0.1, "0.1 inHg higher pressure"),
-    ("dailyrain", 0.5, "0.5 in more rain so far today"),
+    ("tempf", 10.0, "when it's 10°F warmer"),
+    ("humidity", 10.0, "when humidity is 10 points higher"),
+    ("baromrelin", 0.1, "when air pressure rises 0.1 inHg"),
+    ("dailyrain", 0.5, "on a day with ½ inch of rain"),
 ]
 
 
@@ -196,6 +196,11 @@ def get_species_model_data():
 
 
 @bp.route("/species-models")
+def species_models_redirect():
+    return redirect("/bird-models", 301)
+
+
+@bp.route("/bird-models")
 def species_models():
     # Same format as main.page_generated_now (not imported: main.py runs as __main__)
     page_generated = datetime.now().strftime("%A, %B %d, %Y — %I:%M %p")

@@ -998,7 +998,6 @@ def analytics():
     return resp
 
 
-@app.route("/bird-models")
 def bird_models():
     clock_data = get_bird_clock_data()
     return render_template("bird_models.html", clock_data=clock_data, page_generated=page_generated_now())
@@ -1058,6 +1057,15 @@ def subscribe():
     except Exception as e:
         print(f"[ERROR] Subscribe error: {e}")
         return "error", 500
+
+from species_models import bp as species_bp
+app.register_blueprint(species_bp)
+
+from call_flow import bp as call_flow_bp
+app.register_blueprint(call_flow_bp)
+
+from meshmap_page import bp as meshmap_bp
+app.register_blueprint(meshmap_bp)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, threaded=True)
