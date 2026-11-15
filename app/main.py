@@ -13,7 +13,6 @@ import requests
 from flask import Flask, render_template, make_response, request, Response, jsonify
 
 
-EBIRD_API_KEY = os.environ["EBIRD_API_KEY"]
 
 from astral import LocationInfo
 from astral.sun import sun
@@ -65,40 +64,6 @@ def get_moon_phase():
         "name": name,
         "waxing": phase < 0.5,
     }
-EBIRD_LAT = 36.0999
-EBIRD_LNG = -80.2442
-ebird_sightings = []
-
-def run_ebird_loop():
-    global ebird_sightings
-    while True:
-        try:
-            url = f"https://api.ebird.org/v2/data/obs/geo/recent?lat={EBIRD_LAT}&lng={EBIRD_LNG}&back=3&maxResults=5"
-            resp = requests.get(url, headers={"X-eBirdApiToken": EBIRD_API_KEY}, timeout=10)
-            data = resp.json()
-            def _fmt_date(d):
-                if not d:
-                    return ""
-                try:
-                    dt = datetime.strptime(d, "%Y-%m-%d %H:%M")
-                    return dt.strftime("%-m/%-d/%y %H:%M")
-                except ValueError:
-                    try:
-                        dt = datetime.strptime(d, "%Y-%m-%d")
-                        return dt.strftime("%-m/%-d/%y")
-                    except ValueError:
-                        return d
-
-            ebird_sightings = [
-                {"name": o.get("comName"), "loc": o.get("locName", "").split(",")[0], "date": _fmt_date(o.get("obsDt"))}
-                for o in data
-            ]
-            print(f"[{time.strftime('%X')}] eBird Sync -> {len(ebird_sightings)} sightings")
-        except Exception as e:
-            print(f"[ERROR] eBird fetch error: {e}")
-        time.sleep(3600)
-
-threading.Thread(target=run_ebird_loop, daemon=True).start()
 
 
 subprocess.run(['fuser', '-k', '5000/tcp'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -217,7 +182,7 @@ def dashboard():
         windspeeds=windspeeds, windgusts=windgusts,
         dailyrains=dailyrains,
         current_image=current_image, page_generated=page_generated,
-        ebird_sightings=ebird_sightings, sun_times=sun_times, moon_phase=moon_phase
+        sun_times=sun_times, moon_phase=moon_phase
     ))
     resp.headers["Cache-Control"] = "no-store, must-revalidate"
     return resp
