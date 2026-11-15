@@ -2,12 +2,97 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Mesh vs APRS Lab — Winston-Salem Bird Station</title>
+    <title>Mesh (900 MHz) vs APRS (144 MHz) Lab — Winston-Salem Bird Station</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Simulated preview of a 24/7 radio experiment: BirdNET events broadcast over a Meshtastic LoRa mesh, compared against APRS.">
-    <meta property="og:title" content="Mesh vs APRS Lab — Winston-Salem Bird Station">
-    <link rel="stylesheet" href="/static/site.css">
+    <meta property="og:title" content="Mesh (900 MHz) vs APRS (144 MHz) Lab — Winston-Salem Bird Station">
     <style>
+/* Shared site styles — single source of truth for typography + nav across all pages */
+
+body {
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+  margin: 20px;
+  background-color: #f4f6f8;
+  color: #333;
+}
+
+h1 {
+  font-size: 1.5rem;
+  color: #2c3e50;
+  text-align: center;
+  margin: 0 0 4px;
+}
+
+h2 {
+  font-size: 1.1rem;
+  color: #333;
+  text-align: center;
+  margin-top: 0;
+}
+
+.page-subtitle {
+  margin: 5px 0 0;
+  color: #666;
+  font-size: 1rem;
+  text-align: center;
+}
+
+.nav-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  max-width: 640px;
+  margin: 0 auto 15px;
+}
+
+.nav-link {
+  flex: 1;
+  min-width: 140px;
+  text-align: center;
+  background: white;
+  border: 2px solid #1a1a1a;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 14px 22px;
+  color: #2c3e50;
+  font-weight: bold;
+  text-decoration: none;
+  font-size: 1rem;
+  transition: 0.15s;
+}
+
+.nav-link:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
+}
+
+/* Phone only — laptop stays untouched */
+@media (max-width: 600px) {
+  body { margin: 10px; }
+
+  h1 { font-size: 1.25rem; }
+  h2 { font-size: 1rem; }
+  .page-subtitle { font-size: 0.9rem; }
+
+  .nav-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    max-width: 100%;
+    margin: 0 auto 10px;
+  }
+
+  .nav-link {
+    flex: initial;
+    min-width: 0;
+    padding: 8px 4px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    border-radius: 6px;
+  }
+}
+
         .container { display:flex; flex-direction:column; gap:20px; max-width:960px; margin:0 auto; }
         .card { background:#fff; padding:18px 20px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
         .sim-badge { display:inline-block; background:#fff4e0; color:#a35a00; border:1px solid #f0c27a; border-radius:12px; padding:2px 10px; font-size:0.75rem; font-weight:bold; letter-spacing:0.05em; }
@@ -47,7 +132,7 @@
     {% include "partials/nav.html" %}
 
     <div style="text-align:center;">
-        <h1 style="margin:0;color:#1f4e79;">Mesh vs APRS Lab</h1>
+        <h1 style="margin:0;color:#1f4e79;">Mesh (900 MHz) vs APRS (144 MHz) Lab</h1>
         <p style="margin:6px auto 0;color:#666;font-size:0.9rem;max-width:720px;">
             A planned 24/7 experiment: when BirdNET hears a bird, the home Pi broadcasts the event over a
             4-node Meshtastic LoRa mesh, and each node reports back how it got the message.

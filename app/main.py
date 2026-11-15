@@ -208,14 +208,6 @@ def dashboard():
     current_image = f"live.jpg?v={image_version}"
     page_generated = page_generated_now()
 
-    conn2 = sqlite3.connect(DB_FILE)
-    early_bird_row = conn2.execute("SELECT Com_Name, Sci_Name, substr(Time,1,5) FROM detections WHERE Date = date('now','localtime') ORDER BY Time ASC LIMIT 1").fetchone()
-    conn2.close()
-    early_bird = {"com_name": early_bird_row[0], "sci_name": early_bird_row[1], "time": early_bird_row[2]} if early_bird_row else None
-    conn3 = sqlite3.connect(DB_FILE)
-    night_owl_row = conn3.execute("SELECT Com_Name, Sci_Name, substr(Time,1,5) FROM detections WHERE Date = date('now','localtime','-1 day') AND Time <= '20:00:00' ORDER BY Time DESC LIMIT 1").fetchone()
-    conn3.close()
-    night_owl = {"com_name": night_owl_row[0], "sci_name": night_owl_row[1], "time": night_owl_row[2]} if night_owl_row else None
     sun_times = get_sun_times()
     moon_phase = get_moon_phase()
 
@@ -225,8 +217,7 @@ def dashboard():
         windspeeds=windspeeds, windgusts=windgusts,
         dailyrains=dailyrains,
         current_image=current_image, page_generated=page_generated,
-        ebird_sightings=ebird_sightings, sun_times=sun_times, moon_phase=moon_phase,
-        early_bird=early_bird, night_owl=night_owl
+        ebird_sightings=ebird_sightings, sun_times=sun_times, moon_phase=moon_phase
     ))
     resp.headers["Cache-Control"] = "no-store, must-revalidate"
     return resp
