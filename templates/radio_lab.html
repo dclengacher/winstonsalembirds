@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Mesh vs APRS Lab — Winston-Salem Bird Station</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Simulated preview of a 24/7 radio experiment: BirdNET events broadcast over a Meshtastic LoRa mesh, compared against APRS.">
+    <meta property="og:title" content="Mesh vs APRS Lab — Winston-Salem Bird Station">
+    <link rel="stylesheet" href="/static/site.css">
+    <style>
+        .container { display:flex; flex-direction:column; gap:20px; max-width:960px; margin:0 auto; }
+        .card { background:#fff; padding:18px 20px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
+        .sim-badge { display:inline-block; background:#fff4e0; color:#a35a00; border:1px solid #f0c27a; border-radius:12px; padding:2px 10px; font-size:0.75rem; font-weight:bold; letter-spacing:0.05em; }
+        .muted { color:#777; font-size:0.85rem; }
+        #stage { width:100%; height:auto; display:block; background:#fbfcfd; border-radius:6px; }
+        #stage text { font-family:inherit; }
+        .node-label { font-size:13px; font-weight:bold; fill:#2c3e50; }
+        .node-sub { font-size:10.5px; fill:#777; }
+        .grid line { stroke:#e8ecf0; stroke-width:1; }
+        .link { fill:none; stroke-width:2.5; stroke-dasharray:3 7; stroke-linecap:round; animation:march 0.6s linear infinite; }
+        @keyframes march { to { stroke-dashoffset:-20; } }
+        .tx { stroke:#1f4e79; } .relay { stroke:#8e44ad; } .ack { stroke:#27ae60; } .miss { stroke:#c0392b; stroke-dasharray:2 9; opacity:0.55; }
+        .pulse { fill:none; stroke:#e0893a; stroke-width:2; }
+        .event-banner { font-size:13px; fill:#a35a00; font-weight:bold; }
+        .legend { display:flex; gap:16px; flex-wrap:wrap; justify-content:center; font-size:0.8rem; color:#555; margin-top:10px; }
+        .legend span i { display:inline-block; width:22px; border-top:3px dotted; vertical-align:middle; margin-right:6px; }
+        .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+        .m-card { border:1px solid #e1e6eb; border-radius:8px; padding:12px 14px; transition:background 0.4s; }
+        .m-card.flash { background:#f2f8ff; }
+        .m-card h3 { margin:0 0 8px; font-size:0.95rem; color:#2c3e50; }
+        .m-row { display:flex; justify-content:space-between; font-size:0.85rem; padding:3px 0; border-bottom:1px dashed #eee; }
+        .m-row:last-child { border-bottom:0; }
+        .m-row b { color:#2c3e50; }
+        .bar { height:6px; background:#eee; border-radius:3px; margin-top:2px; overflow:hidden; }
+        .bar > div { height:100%; background:#1f4e79; transition:width 0.5s; }
+        .totals { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; text-align:center; margin-top:14px; }
+        .totals .big { font-size:1.4rem; font-weight:bold; color:#1f4e79; }
+        .totals .lbl { font-size:0.75rem; color:#777; }
+        @media (max-width:600px) { .metrics { grid-template-columns:1fr; } .totals { grid-template-columns:repeat(2,1fr); } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="text-align:center;">
+        {% include "partials/header.html" %}
+    </div>
+    {% include "partials/nav.html" %}
+
+    <div style="text-align:center;">
+        <h1 style="margin:0;color:#1f4e79;">Mesh vs APRS Lab</h1>
+        <p style="margin:6px auto 0;color:#666;font-size:0.9rem;max-width:720px;">
+            A planned 24/7 experiment: when BirdNET hears a bird, the home Pi broadcasts the event over a
+            4-node Meshtastic LoRa mesh, and each node reports back how it got the message.
+            <span class="sim-badge">SIMULATED PREVIEW</span>
+        </p>
+    </div>
+
+    <div class="card">
+        <svg id="stage" viewBox="0 0 860 620" role="img" aria-label="Simulated Meshtastic mesh: home Pi broadcasting a BirdNET event to three nodes">
+            <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M0,0 L10,5 L0,10 z" fill="#aaa"/>
+                </marker>
+            </defs>
+            <!-- 0.5 mi square: 560px = 0.5 mi -->
+            <g class="grid" id="grid"></g>
+            <rect x="30" y="30" width="560" height="560" fill="none" stroke="#c9d2db" stroke-width="1.5"/>
+            <text x="310" y="22" text-anchor="middle" class="node-sub">0.5 mi × 0.5 mi</text>
+            <line x1="40" y1="608" x2="320" y2="608" stroke="#999" stroke-width="2"/>
+            <line x1="40" y1="602" x2="40" y2="614" stroke="#999" stroke-width="2"/>
+            <line x1="320" y1="602" x2="320" y2="614" stroke="#999" stroke-width="2"/>
+            <text x="180" y="603" text-anchor="middle" class="node-sub">0.25 mi</text>
+
+            <!-- APRS strip (next phase) -->
+            <line x1="590" y1="440" x2="790" y2="440" stroke="#bbb" stroke-width="1.5" stroke-dasharray="6 6" marker-end="url(#arrow)"/>
+            <text x="690" y="430" text-anchor="middle" class="node-sub">≈ 3 mi (not to scale)</text>
+            <g opacity="0.55">
+                <circle cx="810" cy="440" r="16" fill="#fff" stroke="#999" stroke-width="2"/>
+                <text x="810" y="445" text-anchor="middle" font-size="11" fill="#666" font-weight="bold">FT65</text>
+                <text x="810" y="476" text-anchor="middle" class="node-sub">APRS receiver</text>
+                <text x="810" y="490" text-anchor="middle" class="node-sub">next phase</text>
+            </g>
+
+            <g id="links"></g>
+            <g id="nodes"></g>
+            <text id="banner" x="310" y="60" text-anchor="middle" class="event-banner"></text>
+        </svg>
+        <div class="legend">
+            <span><i style="border-color:#1f4e79"></i>Broadcast from home</span>
+            <span><i style="border-color:#c0392b"></i>Missed</span>
+            <span><i style="border-color:#8e44ad"></i>Relayed by another node</span>
+            <span><i style="border-color:#27ae60"></i>Confirmation back to home</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-bottom:4px;">What each node reports</h2>
+        <p class="muted" style="text-align:center;margin:0 0 12px;">Latest event · signal strength (RSSI), signal quality (SNR), and the path the message took.</p>
+        <div class="metrics" id="metrics"></div>
+        <div class="totals">
+            <div><div class="big" id="t-events">0</div><div class="lbl">BirdNET events sent</div></div>
+            <div><div class="big" id="t-deliv">–</div><div class="lbl">Delivered (any path)</div></div>
+            <div><div class="big" id="t-direct">–</div><div class="lbl">Delivered direct (1 hop)</div></div>
+            <div><div class="big" id="t-rssi">–</div><div class="lbl">Avg RSSI</div></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>The setup</h2>
+        <p class="muted" style="margin:0;">
+            <b>Home:</b> Raspberry Pi 4 running BirdNET-Pi and the WittBoy weather station, with an H4 Slim Pro GPS node (Meshtastic) and a
+            BTECH UV-Pro + Digirig Mobile for APRS.
+            <b>Mesh nodes:</b> SenseCAP T1000 and 2× RAK WisMesh Pocket v3, spread across about half a mile.
+            <b>APRS (next phase):</b> Yaesu FT65 about 3 miles away, so the two radio systems can be compared on the same events.
+        </p>
+    </div>
+</div>
+
+<script>
+(function () {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.getElementById("stage");
+    const linksG = document.getElementById("links");
+    const nodesG = document.getElementById("nodes");
+    const banner = document.getElementById("banner");
+
+    // grid every 0.1 mi (112px)
+    const grid = document.getElementById("grid");
+    for (let i = 1; i < 5; i++) {
+        const v = 30 + i * 112;
+        grid.insertAdjacentHTML("beforeend",
+            `<line x1="${v}" y1="30" x2="${v}" y2="590"/><line x1="30" y1="${v}" x2="590" y2="${v}"/>`);
+    }
+
+    const HOME = { id: "home", name: "HOME", sub: ["Pi4 · H4 · BirdNET · WittBoy", "UV-Pro + Digirig (APRS)"], x: 140, y: 470, r: 22, color: "#e0893a" };
+    const NODES = [
+        { id: "t1000", name: "T1000", sub: ["SenseCAP tracker"], x: 470, y: 120, r: 16, color: "#1f4e79", dist: 0.42 },
+        { id: "wisA",  name: "WisMesh A", sub: ["Pocket v3"], x: 500, y: 450, r: 16, color: "#1f4e79", dist: 0.32 },
+        { id: "wisB",  name: "WisMesh B", sub: ["Pocket v3"], x: 170, y: 140, r: 16, color: "#1f4e79", dist: 0.30 },
+    ];
+    const ALL = [HOME, ...NODES];
+
+    function drawNode(n) {
+        const g = document.createElementNS(NS, "g");
+        g.innerHTML =
+            `<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="#fff" stroke="${n.color}" stroke-width="3"/>` +
+            `<circle id="dot-${n.id}" cx="${n.x}" cy="${n.y}" r="${n.r * 0.45}" fill="${n.color}"/>` +
+            `<text x="${n.x}" y="${n.y + n.r + 16}" text-anchor="middle" class="node-label">${n.name}</text>` +
+            n.sub.map((s, i) => `<text x="${n.x}" y="${n.y + n.r + 30 + i * 13}" text-anchor="middle" class="node-sub">${s}</text>`).join("");
+        nodesG.appendChild(g);
+    }
+    ALL.forEach(drawNode);
+
+    const SPECIES = ["Carolina Wren", "Northern Cardinal", "Blue Jay", "Tufted Titmouse", "Carolina Chickadee", "American Crow", "White-throated Sparrow", "Red-bellied Woodpecker"];
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const rand = (a, b) => a + Math.random() * (b - a);
+
+    // Line that marches from a to b, with a packet dot travelling along it
+    function link(a, b, cls, dur, keep = 2600) {
+        const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+        const ox = dx / len, oy = dy / len;
+        const x1 = a.x + ox * a.r, y1 = a.y + oy * a.r, x2 = b.x - ox * b.r, y2 = b.y - oy * b.r;
+        const line = document.createElementNS(NS, "line");
+        line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+        line.setAttribute("x2", x1); line.setAttribute("y2", y1);
+        line.setAttribute("class", "link " + cls);
+        linksG.appendChild(line);
+        const dot = document.createElementNS(NS, "circle");
+        dot.setAttribute("r", 4.5);
+        dot.setAttribute("fill", getComputedStyle(line).stroke);
+        if (!cls.includes("miss")) linksG.appendChild(dot);
+        const t0 = performance.now();
+        return new Promise(res => {
+            (function step(now) {
+                const f = Math.min(1, (now - t0) / dur);
+                const fx = cls.includes("miss") ? Math.min(f, 0.55) : f;  // missed packets die out mid-air
+                const cx = x1 + (x2 - x1) * fx, cy = y1 + (y2 - y1) * fx;
+                line.setAttribute("x2", cx); line.setAttribute("y2", cy);
+                dot.setAttribute("cx", cx); dot.setAttribute("cy", cy);
+                if (f < 1) return requestAnimationFrame(step);
+                dot.remove();
+                setTimeout(() => { line.style.transition = "opacity .6s"; line.style.opacity = 0; setTimeout(() => line.remove(), 700); }, keep);
+                res();
+            })(t0);
+        });
+    }
+
+    function pulse(n) {
+        for (let k = 0; k < 3; k++) {
+            const c = document.createElementNS(NS, "circle");
+            c.setAttribute("cx", n.x); c.setAttribute("cy", n.y); c.setAttribute("r", n.r);
+            c.setAttribute("class", "pulse");
+            linksG.appendChild(c);
+            c.animate([{ r: n.r, opacity: 0.9 }, { r: n.r + 60, opacity: 0 }],
+                { duration: 1400, delay: k * 300, easing: "ease-out", fill: "forwards" }).onfinish = () => c.remove();
+        }
+    }
+
+    function flashDot(n, color) {
+        const d = document.getElementById("dot-" + n.id);
+        d.animate([{ fill: color, r: n.r * 0.8 }, { fill: n.color, r: n.r * 0.45 }], { duration: 900, easing: "ease-out" });
+    }
+
+    // ---- metrics ----
+    const mEl = document.getElementById("metrics");
+    NODES.forEach(n => mEl.insertAdjacentHTML("beforeend", `
+        <div class="m-card" id="m-${n.id}">
+            <h3>${n.name} <span class="muted" style="font-weight:normal;">· ${n.dist} mi from home</span></h3>
+            <div class="m-row"><span>Signal strength (RSSI)</span><b id="rssi-${n.id}">–</b></div>
+            <div class="bar"><div id="rssibar-${n.id}" style="width:0%"></div></div>
+            <div class="m-row"><span>Signal quality (SNR)</span><b id="snr-${n.id}">–</b></div>
+            <div class="bar"><div id="snrbar-${n.id}" style="width:0%;background:#27ae60"></div></div>
+            <div class="m-row"><span>Path</span><b id="path-${n.id}">–</b></div>
+            <div class="m-row"><span>Hops</span><b id="hops-${n.id}">–</b></div>
+            <div class="m-row"><span>Latency</span><b id="lat-${n.id}">–</b></div>
+        </div>`));
+
+    const totals = { events: 0, sent: 0, delivered: 0, direct: 0, rssiSum: 0, rssiN: 0 };
+
+    function report(n, r) {
+        const $ = id => document.getElementById(id);
+        $("rssi-" + n.id).textContent = r.ok ? `${r.rssi} dBm` : "no signal";
+        $("rssibar-" + n.id).style.width = r.ok ? `${Math.max(0, Math.min(100, (r.rssi + 125) / 70 * 100))}%` : "0%";
+        $("snr-" + n.id).textContent = r.ok ? `${r.snr > 0 ? "+" : ""}${r.snr} dB` : "–";
+        $("snrbar-" + n.id).style.width = r.ok ? `${Math.max(0, Math.min(100, (r.snr + 20) / 32 * 100))}%` : "0%";
+        $("path-" + n.id).textContent = !r.ok ? "not received" : r.via ? `Home → ${r.via} → ${n.name}` : `Home → ${n.name}`;
+        $("hops-" + n.id).textContent = r.ok ? (r.via ? "2 (relayed)" : "1 (direct)") : "–";
+        $("lat-" + n.id).textContent = r.ok ? `${(r.lat / 1000).toFixed(1)} s` : "–";
+        const card = $("m-" + n.id);
+        card.classList.add("flash"); setTimeout(() => card.classList.remove("flash"), 700);
+    }
+
+    function updateTotals() {
+        const pct = (a, b) => b ? Math.round(100 * a / b) + "%" : "–";
+        document.getElementById("t-events").textContent = totals.events;
+        document.getElementById("t-deliv").textContent = pct(totals.delivered, totals.sent);
+        document.getElementById("t-direct").textContent = pct(totals.direct, totals.sent);
+        document.getElementById("t-rssi").textContent = totals.rssiN ? Math.round(totals.rssiSum / totals.rssiN) + " dBm" : "–";
+    }
+
+    // Simulated radio: farther nodes get weaker signal and miss more often
+    function directResult(n) {
+        const pOk = 0.92 - n.dist * 0.45;   // ~73-79% direct success
+        const ok = Math.random() < pOk;
+        const rssi = Math.round(-78 - n.dist * 60 + rand(-8, 8));
+        const snr = Math.round((9 - n.dist * 18 + rand(-4, 4)) * 10) / 10;
+        return { ok, rssi, snr };
+    }
+
+    async function cycle() {
+        linksG.querySelectorAll("line").forEach(l => l.remove());
+        const sp = SPECIES[Math.floor(Math.random() * SPECIES.length)];
+        const conf = rand(0.72, 0.98).toFixed(2);
+        banner.textContent = `BirdNET event: ${sp} (${conf})`;
+        pulse(HOME);
+        flashDot(HOME, "#ffb26b");
+        await sleep(1300);
+
+        totals.events++; updateTotals();
+        // 1. Home broadcasts to all three at the same time; arrivals differ
+        const res = {};
+        const direct = NODES.map(n => {
+            const r = directResult(n);
+            const airtime = 900 + n.dist * 1600 + rand(0, 700);
+            res[n.id] = { ...r, lat: Math.round(airtime + rand(150, 500)), via: null };
+            return link(HOME, n, r.ok ? "tx" : "miss", airtime).then(() => {
+                if (r.ok) { flashDot(n, "#5dade2"); report(n, res[n.id]); }
+            });
+        });
+        await Promise.all(direct);
+        await sleep(400);
+
+        // 2. Nodes that missed it get it relayed by a node that heard it (Meshtastic rebroadcast)
+        const heard = NODES.filter(n => res[n.id].ok);
+        const missed = NODES.filter(n => !res[n.id].ok);
+        await Promise.all(missed.map(async n => {
+            if (!heard.length || Math.random() < 0.12) { report(n, { ok: false }); return; }
+            const relay = heard.reduce((best, h) =>
+                Math.hypot(h.x - n.x, h.y - n.y) < Math.hypot(best.x - n.x, best.y - n.y) ? h : best);
+            const dur = 900 + rand(0, 600);
+            await link(relay, n, "relay", dur);
+            const r = directResult({ dist: Math.hypot(relay.x - n.x, relay.y - n.y) / 1120 });
+            res[n.id] = { ok: true, rssi: r.rssi, snr: r.snr, via: relay.name, lat: res[n.id].lat + dur + 1200 };
+            flashDot(n, "#c39bd3");
+            report(n, res[n.id]);
+        }));
+        await sleep(500);
+
+        // 3. Confirmations back to home (along the same path)
+        await Promise.all(NODES.filter(n => res[n.id].ok).map(async n => {
+            await sleep(rand(0, 700));
+            if (res[n.id].via) {
+                const relay = NODES.find(x => x.name === res[n.id].via);
+                await link(n, relay, "ack", 800);
+                await link(relay, HOME, "ack", 900);
+            } else {
+                await link(n, HOME, "ack", 1000);
+            }
+            flashDot(HOME, "#58d68d");
+        }));
+
+        NODES.forEach(n => {
+            const r = res[n.id];
+            totals.sent++;
+            if (r.ok) { totals.delivered++; totals.rssiSum += r.rssi; totals.rssiN++; if (!r.via) totals.direct++; }
+        });
+        updateTotals();
+        banner.textContent = "";
+        await sleep(2600);
+        cycle();
+    }
+
+    setTimeout(cycle, 600);
+})();
+</script>
+</body>
+</html>

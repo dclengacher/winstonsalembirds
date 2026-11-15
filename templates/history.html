@@ -127,16 +127,7 @@ h2 {
     <div style="text-align:center;margin-bottom:15px;">
         {% include "partials/header.html" %}
     </div>
-    <div class="nav-bar" style="margin-bottom:15px;">
-        <a href="/" class="nav-link">Dashboard</a>
-        <a href="/bird-models" class="nav-link">Bird Models</a>
-        <a href="/dueling-models" class="nav-link">Dueling Models</a>
-        <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
-        <a href="/analytics" class="nav-link">Analytics</a>
-        <a href="/alltime" class="nav-link">All-Time Species</a>
-        <a href="/call-flow" class="nav-link">Flow Decomp</a>
-        <a href="/planes-detected" class="nav-link">Planes</a>
-    </div>
+    {% include "partials/nav.html" %}
 
     <h1>Project History</h1>
     <p class="subtitle">From garden sensors to bird songs</p>
@@ -259,7 +250,7 @@ ORDER BY block ASC;</code></pre>
         <img src="/static/history/11_adsb_setup.jpg" alt="RTL-SDR dongle and antenna used for ADS-B aircraft tracking" onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.src.split('?')[0]+'?retry='+Date.now();},500);}">
         <div class="story-text">
             <h2>A side quest: watching planes instead of birds</h2>
-            <p>The BirdNET-Pi hardware was already running full-time, so when an RTL-SDR dongle showed up cheap, it was hard to resist plugging it in just to see what else the same little Pi could listen to. It turned out that a $30 USB stick, an antenna, and readsb are enough to decode ADS-B broadcasts from aircraft passing overhead &mdash; the same signals air traffic control uses, just picked up from a backyard. It's a just-for-fun addition, not the point of the project, but the live <a href="/planes-detected">Planes Detected</a> radar was too neat a byproduct not to keep around.</p>
+            <p>The BirdNET-Pi hardware was already running full-time, so when an RTL-SDR dongle showed up cheap, it was hard to resist plugging it in just to see what else the same little Pi could listen to. It turned out that a $30 USB stick, an antenna, and readsb are enough to decode ADS-B broadcasts from aircraft passing overhead &mdash; the same signals air traffic control uses, just picked up from a backyard. It's a just-for-fun addition, not the point of the project, and it was later retired to free up memory on the Pi for the radio lab.</p>
         </div>
     </div>
 </div>

@@ -134,3 +134,10 @@ Two independent modeling scripts both consume `extracted_data.csv` (each capped 
 
 ---
 *This doc is maintained by hand (or by an assistant with repo access) alongside code changes — it is not auto-generated. If you change routes, templates, or the pipeline, update the relevant section above in the same change.*
+
+## Changelog — 2026-11-15
+- Site split into two nav groups via shared `templates/partials/nav.html`: **Bird Detection Modeling** and **Communications & Radio Science Lab**. Every page now includes this one partial instead of its own hand-copied nav.
+- Removed the Planes page: `/planes-detected`, `/api/planes-live`, the readsb poll thread, `planes_detected.html`, `airline_codes.py`, `scripts/build_aircraft_type_db.py`, and `data/aircraft_types*.json` (~57 MB, previously loaded into RAM at startup).
+- Removed dead `bird_models.html` + `get_bird_clock_data()` (no route served them; `/bird-models` is served by `species_models.py`).
+- Renamed: Bird Models → Statistical Models; Analytics → Model Training & Fit Performance; Flow Decomp page header + subtitle now say "detections" (3-second clips), and the window is a true 7 days.
+- New `/radio-lab` (`app/radio_lab.py`, `templates/radio_lab.html`): client-side simulated Meshtastic mesh animation; no DB reads. `static/site.css` is now used by this page.

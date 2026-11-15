@@ -22,8 +22,9 @@ TIME_BUCKETS = [("Dawn", "5–8am", 0, 8), ("Morning", "9–11am", 9, 11),
 
 def get_call_flow_data():
     today = date.today()
-    wk_start = (today - timedelta(days=7)).isoformat()
-    prev_start = (today - timedelta(days=35)).isoformat()
+    wk_start_d = today - timedelta(days=6)  # 7 calendar days including today
+    wk_start = wk_start_d.isoformat()
+    prev_start = (wk_start_d - timedelta(days=28)).isoformat()
     new_cutoff = (today - timedelta(days=30)).isoformat()
 
     conn = sqlite3.connect(DB_FILE)
@@ -84,7 +85,7 @@ def get_call_flow_data():
     order = {"new": 0, "reg": 1, "fade": 2}
     species_list = sorted(species.values(), key=lambda s: (order[s["g"]], s["name"].startswith("Other"), -s["n"]))
     return {
-        "since": (today - timedelta(days=7)).strftime("%b %-d"),
+        "since": wk_start_d.strftime("%b %-d"),
         "total": sum(totals.values()),
         "species": species_list,
         "flows": [{"s": s, "t": t, "n": c} for (s, t), c in flows.items()],

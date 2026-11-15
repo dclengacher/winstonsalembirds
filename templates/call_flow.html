@@ -116,18 +116,10 @@ h2 {
     <div style="text-align:center;margin-bottom:15px;">
         {% include "partials/header.html" %}
     </div>
-    <div class="nav-bar">
-        <a href="/" class="nav-link">Dashboard</a>
-        <a href="/bird-models" class="nav-link">Bird Models</a>
-        <a href="/dueling-models" class="nav-link">Dueling Models</a>
-        <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
-        <a href="/history" class="nav-link">Project History</a>
-        <a href="/analytics" class="nav-link">Analytics</a>
-        <a href="/planes-detected" class="nav-link">Planes</a>
-    </div>
+    {% include "partials/nav.html" %}
     <div style="text-align:center;">
-        <h1 style="margin:0;color:#2c3e50;">Who's Calling</h1>
-        <p style="margin:5px auto 0;color:#666;font-size:0.9rem;max-width:680px;">{% if data %}Every bird call the mic picked up since {{ data.since }} ({{ "{:,}".format(data.total) }} in all), traced from newcomer, regular or departing bird, to species, to time of day. Hover a color to follow just that group.{% endif %}</p>
+        <h1 style="margin:0;color:#2c3e50;">Flow Decomp</h1>
+        <p style="margin:5px auto 0;color:#666;font-size:0.9rem;max-width:680px;">{% if data %}All BirdNET detections since {{ data.since }}: {{ "{:,}".format(data.total) }} in all. Each detection is one 3-second clip with a bird identified, so one long song counts several times. Traced from newcomer, regular or departing bird, to species, to time of day. Hover a color to follow just that group.{% endif %}</p>
     </div>
     <div class="card">
         {% if data %}

@@ -172,16 +172,7 @@ h2 {
     <div style="text-align:center;margin-bottom:15px;">
         {% include "partials/header.html" %}
     </div>
-    <div class="nav-bar">
-        <a href="/" class="nav-link">Dashboard</a>
-        <a href="/bird-models" class="nav-link">Bird Models</a>
-        <a href="/dueling-models" class="nav-link">Dueling Models</a>
-        <a href="/history" class="nav-link">Project History</a>
-        <a href="/analytics" class="nav-link">Analytics</a>
-        <a href="/alltime" class="nav-link">All-Time Species</a>
-        <a href="/call-flow" class="nav-link">Flow Decomp</a>
-        <a href="/planes-detected" class="nav-link">Planes</a>
-    </div>
+    {% include "partials/nav.html" %}
     <div style="text-align:center;">
         <h1 style="margin:0;color:#2c3e50;">Seasonal Trends</h1>
         <p style="margin:5px 0 0;color:#666;font-size:0.9rem;max-width:70ch;margin-left:auto;margin-right:auto;">One row per species, one column per closed week, over a rolling 26-week window. Colour is each species' share of that week's detections, scaled against its own busiest week so a rare bird reads as clearly as a common one. Rows are ordered by the week each species peaks, so a genuine seasonal march shows up as a diagonal. It's share of the week's total, not raw counts, so a mic change or a rainy week can't fake a trend.</p>

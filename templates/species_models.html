@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Bird Models — Winston-Salem Bird Station</title>
+    <title>Statistical Models — Winston-Salem Bird Station</title>
     <meta name="description" content="One integrated bird model, unpacked into 20 species-specific models: daily rhythm, seasonal arc and weather response for the most-heard birds at the Winston-Salem Bird Station.">
-    <meta property="og:title" content="Bird Models — Winston-Salem Bird Station">
+    <meta property="og:title" content="Statistical Models — Winston-Salem Bird Station">
     <meta property="og:description" content="Daily rhythm and seasonal arc for the 20 most-heard backyard birds, unpacked from one Bayesian model.">
     <meta property="og:image" content="https://winstonsalembirds.com/static/Dashboard.png">
     <meta property="og:url" content="https://winstonsalembirds.com/bird-models">
@@ -135,18 +135,10 @@ h2 {
     <div style="text-align:center;margin-bottom:15px;">
         {% include "partials/header.html" %}
     </div>
-    <div class="nav-bar">
-        <a href="/" class="nav-link">Dashboard</a>
-        <a href="/dueling-models" class="nav-link">Dueling Models</a>
-        <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
-        <a href="/history" class="nav-link">Project History</a>
-        <a href="/analytics" class="nav-link">Analytics</a>
-        <a href="/call-flow" class="nav-link">Flow Decomp</a>
-        <a href="/planes-detected" class="nav-link">Planes</a>
-    </div>
+    {% include "partials/nav.html" %}
 
     <div style="text-align:center;">
-        <h1 style="margin:0;color:#2c3e50;">Bird Models</h1>
+        <h1 style="margin:0;color:#2c3e50;">Statistical Models</h1>
         <p style="margin:5px auto 0;color:#666;font-size:0.9rem;max-width:720px;">One model learns from every bird at once. Here it's unpacked into a separate model for each of the 20 most-heard species: when in the day it calls, how its season is unfolding, and how weather shifts it.</p>
     </div>
 
@@ -163,8 +155,8 @@ h2 {
             </div>
             {% endfor %}
         </div>
-        <details style="margin-top:14px;">
-            <summary>How a species model is rebuilt from the integrated model</summary>
+        <div class="model-box" style="margin-top:14px;font-size:0.8rem;color:#555;background:#f7f9fb;border:1px solid #e1e6eb;border-radius:6px;padding:10px 14px;">
+            <div style="font-weight:bold;color:#2c3e50;margin-bottom:4px;">How a species model is rebuilt from the integrated model</div>
             <div class="eq">
                 log(calls/hr) = <b>intercept</b> + <b>species offset</b><br>
                 &nbsp;&nbsp;+ <b>hour curve</b> (shared hour effect + species deviation)<br>
@@ -172,7 +164,7 @@ h2 {
                 &nbsp;&nbsp;+ weather terms (shared)
             </div>
             <p style="margin:6px 0 0;">Shared: intercept {{ data.intercept }}, season {{ data.b_day }}·d + {{ data.b_day2 }}·d². Each card below adds that species' own random effects. d = standardized day of year. Curves hold weather at its average.</p>
-        </details>
+        </div>
         <div class="legend" style="margin-top:14px;">
             <span><span class="swatch" style="background:#1a4a6e;"></span>Predicted calls by hour, today</span>
             <span><span class="swatch" style="background:#e0893a;"></span>Model's daily expectation</span>

@@ -1,0 +1,25 @@
+<style>
+.nav-group-label { text-align:center; font-size:0.72rem; letter-spacing:0.08em; text-transform:uppercase; color:#888; margin:0 0 6px; font-weight:bold; }
+.nav-bar.radio .nav-link { border-color:#1f4e79; color:#1f4e79; }
+.nav-split { max-width:640px; margin:4px auto 14px; border:0; border-top:1px dashed #ccc; }
+.nav-link.active { background:#2c3e50; color:#fff; }
+.nav-bar.radio .nav-link.active { background:#1f4e79; color:#fff; }
+</style>
+{% set p = request.path %}
+<div class="nav-group-label">Bird Detection Modeling</div>
+<div class="nav-bar">
+    <a href="/" class="nav-link{% if p == '/' %} active{% endif %}">Dashboard</a>
+    <a href="/bird-models" class="nav-link{% if p == '/bird-models' %} active{% endif %}">Statistical Models</a>
+    <a href="/dueling-models" class="nav-link{% if p == '/dueling-models' %} active{% endif %}">Dueling Models</a>
+    <a href="/seasonal-trends" class="nav-link{% if p == '/seasonal-trends' %} active{% endif %}">Seasonal Trends</a>
+    <a href="/call-flow" class="nav-link{% if p == '/call-flow' %} active{% endif %}">Flow Decomp</a>
+    <a href="/alltime" class="nav-link{% if p == '/alltime' %} active{% endif %}">All-Time Species</a>
+    <a href="/analytics" class="nav-link{% if p == '/analytics' %} active{% endif %}">Model Training &amp; Fit Performance</a>
+    <a href="/history" class="nav-link{% if p == '/history' %} active{% endif %}">Project History</a>
+</div>
+<hr class="nav-split">
+<div class="nav-group-label">Communications &amp; Radio Science Lab</div>
+<div class="nav-bar radio">
+    <a href="/radio-lab" class="nav-link{% if p == '/radio-lab' %} active{% endif %}">Mesh vs APRS Lab</a>
+    <a href="/meshmap" class="nav-link{% if p == '/meshmap' %} active{% endif %}">LoRa Coverage Map</a>
+</div>

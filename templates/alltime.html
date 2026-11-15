@@ -133,16 +133,7 @@ h2 {
     <div style="text-align:center;margin-bottom:15px;">
         {% include "partials/header.html" %}
     </div>
-    <div class="nav-bar">
-        <a href="/" class="nav-link">Dashboard</a>
-        <a href="/bird-models" class="nav-link">Bird Models</a>
-        <a href="/dueling-models" class="nav-link">Dueling Models</a>
-        <a href="/seasonal-trends" class="nav-link">Seasonal Trends</a>
-        <a href="/history" class="nav-link">Project History</a>
-        <a href="/analytics" class="nav-link">Analytics</a>
-        <a href="/call-flow" class="nav-link">Flow Decomp</a>
-        <a href="/planes-detected" class="nav-link">Planes</a>
-    </div>
+    {% include "partials/nav.html" %}
     <h1>All-Time Species Detected</h1>
     <div class="table-scroll">
     <table>
