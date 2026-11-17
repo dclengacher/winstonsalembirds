@@ -1,6 +1,11 @@
 <style>
 .site-nav .nav-group-label { text-align:center; font-size:1.3rem; letter-spacing:0.05em; text-transform:uppercase; color:#2c3e50; margin:0 0 8px; font-weight:bold; }
-.site-nav .nav-group-label.radio { color:#1f4e79; }
+.site-nav .nav-group-label.radio { color:#1f4e79; display:flex; align-items:center; justify-content:center; gap:10px; }
+.site-nav .antenna { width:34px; height:34px; flex:none; }
+.site-nav .antenna .wave { fill:none; stroke:#1f4e79; stroke-width:2; stroke-linecap:round; opacity:0; animation:wave 1.8s ease-out infinite; }
+.site-nav .antenna .w2 { animation-delay:0.3s; } .site-nav .antenna .w3 { animation-delay:0.6s; }
+@keyframes wave { 0% { opacity:0; } 25% { opacity:1; } 100% { opacity:0; } }
+@media (prefers-reduced-motion: reduce) { .site-nav .antenna .wave { animation:none; opacity:0.6; } }
 .site-nav .nav-bar.radio .nav-link { border-color:#1f4e79; color:#1f4e79; flex:0 1 300px; }
 .site-nav .nav-split { max-width:640px; margin:18px auto 20px; border:0; border-top:1px dashed #ccc; }
 .site-nav .nav-link.active { background:#2c3e50; color:#fff; }
@@ -21,7 +26,16 @@
         <a href="/history" class="nav-link{% if p == '/history' %} active{% endif %}">Project History</a>
     </div>
     <hr class="nav-split">
-    <div class="nav-group-label radio">Off-Grid Radio Lab</div>
+    <div class="nav-group-label radio">
+        <svg class="antenna" viewBox="0 0 40 40" aria-hidden="true">
+            <path d="M20 14 L14 38 M20 14 L26 38 M16 30 L24 30 M17.5 24 L22.5 24" stroke="#1f4e79" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <circle cx="20" cy="12" r="2.5" fill="#1f4e79"/>
+            <path class="wave w1" d="M15 7 A7 7 0 0 0 15 17 M25 7 A7 7 0 0 1 25 17"/>
+            <path class="wave w2" d="M11 4 A11 11 0 0 0 11 20 M29 4 A11 11 0 0 1 29 20"/>
+            <path class="wave w3" d="M7 1 A15 15 0 0 0 7 23 M33 1 A15 15 0 0 1 33 23"/>
+        </svg>
+        <span>Off-Grid Radio Lab</span>
+    </div>
     <div class="nav-bar radio">
         <a href="/radio-lab" class="nav-link{% if p == '/radio-lab' %} active{% endif %}">Mesh vs APRS Lab</a>
     </div>

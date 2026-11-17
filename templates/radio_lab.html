@@ -105,6 +105,8 @@ h2 {
         .link { fill:none; stroke-width:2.5; stroke-dasharray:3 7; stroke-linecap:round; animation:march 0.6s linear infinite; }
         @keyframes march { to { stroke-dashoffset:-20; } }
         .tx { stroke:#1f4e79; } .relay { stroke:#8e44ad; } .ack { stroke:#27ae60; } .miss { stroke:#c0392b; stroke-dasharray:2 9; opacity:0.55; }
+        .aprs { stroke:#d35400; stroke-width:3; stroke-dasharray:14 6; }
+        .fail-tag { font-size:11px; font-weight:bold; fill:#c0392b; }
         .pulse { fill:none; stroke:#e0893a; stroke-width:2; }
         .event-banner { font-size:13px; fill:#a35a00; font-weight:bold; }
         .legend { display:flex; gap:16px; flex-wrap:wrap; justify-content:center; font-size:0.8rem; color:#555; margin-top:10px; }
@@ -141,7 +143,7 @@ h2 {
     </div>
 
     <div class="card">
-        <svg id="stage" viewBox="0 0 860 620" role="img" aria-label="Simulated Meshtastic mesh: home Pi broadcasting a BirdNET event to three nodes">
+        <svg id="stage" viewBox="0 0 860 620" role="img" aria-label="Simulated Meshtastic mesh and APRS: home Pi broadcasting a BirdNET event to three mesh nodes and an FT65 APRS receiver">
             <defs>
                 <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                     <path d="M0,0 L10,5 L0,10 z" fill="#aaa"/>
@@ -156,15 +158,9 @@ h2 {
             <line x1="320" y1="602" x2="320" y2="614" stroke="#999" stroke-width="2"/>
             <text x="180" y="603" text-anchor="middle" class="node-sub">0.25 mi</text>
 
-            <!-- APRS strip (next phase) -->
-            <line x1="590" y1="440" x2="790" y2="440" stroke="#bbb" stroke-width="1.5" stroke-dasharray="6 6" marker-end="url(#arrow)"/>
-            <text x="690" y="430" text-anchor="middle" class="node-sub">≈ 3 mi (not to scale)</text>
-            <g opacity="0.55">
-                <circle cx="810" cy="440" r="16" fill="#fff" stroke="#999" stroke-width="2"/>
-                <text x="810" y="445" text-anchor="middle" font-size="11" fill="#666" font-weight="bold">FT65</text>
-                <text x="810" y="476" text-anchor="middle" class="node-sub">APRS receiver</text>
-                <text x="810" y="490" text-anchor="middle" class="node-sub">next phase</text>
-            </g>
+            <!-- APRS strip: FT65 sits off the map, ~3 mi away -->
+            <line x1="600" y1="285" x2="785" y2="285" stroke="#bbb" stroke-width="1.5" stroke-dasharray="6 6" marker-end="url(#arrow)"/>
+            <text x="692" y="275" text-anchor="middle" class="node-sub">≈ 3 mi (not to scale)</text>
 
             <g id="links"></g>
             <g id="nodes"></g>
@@ -175,6 +171,7 @@ h2 {
             <span><i style="border-color:#c0392b"></i>Missed</span>
             <span><i style="border-color:#8e44ad"></i>Relayed by another node</span>
             <span><i style="border-color:#27ae60"></i>Confirmation back to home</span>
+            <span><i style="border-color:#d35400;border-top-style:dashed"></i>APRS (144 MHz) to FT65</span>
         </div>
     </div>
 
@@ -196,7 +193,7 @@ h2 {
             <b>Home:</b> Raspberry Pi 4 running BirdNET-Pi and the WittBoy weather station, with an H4 Slim Pro GPS node (Meshtastic) and a
             BTECH UV-Pro + Digirig Mobile for APRS.
             <b>Mesh nodes:</b> SenseCAP T1000 and 2× RAK WisMesh Pocket v3, spread across about half a mile.
-            <b>APRS (next phase):</b> Yaesu FT65 about 3 miles away, so the two radio systems can be compared on the same events.
+            <b>APRS:</b> Yaesu FT65 about 3 miles away, so the two radio systems can be compared on the same events.
         </p>
     </div>
 </div>
@@ -223,7 +220,9 @@ h2 {
         { id: "wisA",  name: "WisMesh A", sub: ["Pocket v3"], x: 500, y: 450, r: 16, color: "#1f4e79", dist: 0.32 },
         { id: "wisB",  name: "WisMesh B", sub: ["Pocket v3"], x: 170, y: 140, r: 16, color: "#1f4e79", dist: 0.30 },
     ];
-    const ALL = [HOME, ...NODES];
+    // FT65 is ~3 mi away — drawn off-map, vertically midway between T1000 and WisMesh A
+    const FT65 = { id: "ft65", name: "FT65", sub: ["APRS receiver"], x: 810, y: (120 + 450) / 2, r: 16, color: "#d35400" };
+    const ALL = [HOME, ...NODES, FT65];
 
     function drawNode(n) {
         const g = document.createElementNS(NS, "g");
@@ -241,7 +240,8 @@ h2 {
     const rand = (a, b) => a + Math.random() * (b - a);
 
     // Line that marches from a to b, with a packet dot travelling along it
-    function link(a, b, cls, dur, keep = 2600) {
+    // stopAt < 1 means the packet dies out partway (returns the failure point)
+    function link(a, b, cls, dur, keep = 2600, stopAt = cls.includes("miss") ? 0.55 : 1) {
         const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
         const ox = dx / len, oy = dy / len;
         const x1 = a.x + ox * a.r, y1 = a.y + oy * a.r, x2 = b.x - ox * b.r, y2 = b.y - oy * b.r;
@@ -254,18 +254,20 @@ h2 {
         dot.setAttribute("r", 4.5);
         dot.setAttribute("fill", getComputedStyle(line).stroke);
         if (!cls.includes("miss")) linksG.appendChild(dot);
+        let endX = x2, endY = y2;
         const t0 = performance.now();
         return new Promise(res => {
             (function step(now) {
                 const f = Math.min(1, (now - t0) / dur);
-                const fx = cls.includes("miss") ? Math.min(f, 0.55) : f;  // missed packets die out mid-air
+                const fx = Math.min(f, stopAt);  // failed packets die out mid-air
                 const cx = x1 + (x2 - x1) * fx, cy = y1 + (y2 - y1) * fx;
+                endX = cx; endY = cy;
                 line.setAttribute("x2", cx); line.setAttribute("y2", cy);
                 dot.setAttribute("cx", cx); dot.setAttribute("cy", cy);
                 if (f < 1) return requestAnimationFrame(step);
                 dot.remove();
                 setTimeout(() => { line.style.transition = "opacity .6s"; line.style.opacity = 0; setTimeout(() => line.remove(), 700); }, keep);
-                res();
+                res({ x: endX, y: endY });
             })(t0);
         });
     }
@@ -352,7 +354,19 @@ h2 {
                 if (r.ok) { flashDot(n, "#5dade2"); report(n, res[n.id]); }
             });
         });
-        await Promise.all(direct);
+        // APRS leaves home at the same moment; succeeds ~70% of the time
+        const aprsOk = Math.random() < 0.70;
+        const aprsStop = aprsOk ? 1 : rand(0.35, 0.85);
+        const aprs = link(HOME, FT65, "aprs", 2600 + rand(0, 600), 2600, aprsStop).then(pt => {
+            if (aprsOk) { flashDot(FT65, "#f5b041"); return; }
+            const tag = document.createElementNS(NS, "text");
+            tag.setAttribute("x", pt.x); tag.setAttribute("y", pt.y - 12);
+            tag.setAttribute("text-anchor", "middle"); tag.setAttribute("class", "fail-tag");
+            tag.textContent = "✕ attenuated";
+            linksG.appendChild(tag);
+            setTimeout(() => { tag.style.transition = "opacity .6s"; tag.style.opacity = 0; setTimeout(() => tag.remove(), 700); }, 2600);
+        });
+        await Promise.all([...direct, aprs]);
         await sleep(400);
 
         // 2. Nodes that missed it get it relayed by a node that heard it (Meshtastic rebroadcast)
