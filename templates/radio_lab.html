@@ -105,7 +105,7 @@ h2 {
         .link { fill:none; stroke-width:2.5; stroke-dasharray:3 7; stroke-linecap:round; animation:march 0.6s linear infinite; }
         @keyframes march { to { stroke-dashoffset:-20; } }
         .tx { stroke:#1f4e79; } .relay { stroke:#8e44ad; } .ack { stroke:#27ae60; } .miss { stroke:#c0392b; stroke-dasharray:2 9; opacity:0.55; }
-        .aprs { stroke:#d35400; stroke-width:3; stroke-dasharray:14 6; }
+        .link.aprs { stroke-width:3; stroke-dasharray:14 6; }
         .fail-tag { font-size:11px; font-weight:bold; fill:#c0392b; }
         .pulse { fill:none; stroke:#e0893a; stroke-width:2; }
         .event-banner { font-size:13px; fill:#a35a00; font-weight:bold; }
@@ -168,7 +168,6 @@ h2 {
             <span><i style="border-color:#c0392b"></i>Missed</span>
             <span><i style="border-color:#8e44ad"></i>Relayed by another node</span>
             <span><i style="border-color:#27ae60"></i>Confirmation back to home</span>
-            <span><i style="border-color:#d35400;border-top-style:dashed"></i>APRS (144 MHz) to FT65</span>
         </div>
     </div>
 
@@ -218,7 +217,7 @@ h2 {
         { id: "wisB",  name: "WisMesh B", sub: ["Pocket v3"], x: 170, y: 140, r: 16, color: "#1f4e79", dist: 0.30 },
     ];
     // FT65 is ~3 mi away — drawn off-map, vertically midway between T1000 and WisMesh A
-    const FT65 = { id: "ft65", name: "FT65", sub: ["APRS receiver"], x: 810, y: (120 + 450) / 2, r: 16, color: "#d35400" };
+    const FT65 = { id: "ft65", name: "FT65", sub: ["APRS receiver"], x: 810, y: (120 + 450) / 2, r: 16, color: "#1f4e79" };
     const ALL = [HOME, ...NODES, FT65];
 
     function drawNode(n) {
@@ -357,8 +356,8 @@ h2 {
         const ax1 = HOME.x + HOME.r * (FT65.x - HOME.x) / Math.hypot(FT65.x - HOME.x, FT65.y - HOME.y);
         const ax2 = FT65.x - FT65.r * (FT65.x - HOME.x) / Math.hypot(FT65.x - HOME.x, FT65.y - HOME.y);
         const aprsStop = aprsOk ? 1 : (rand(610, 760) - ax1) / (ax2 - ax1);
-        const aprs = link(HOME, FT65, "aprs", 2600 + rand(0, 600), 2600, aprsStop).then(pt => {
-            if (aprsOk) { flashDot(FT65, "#f5b041"); return; }
+        const aprs = link(HOME, FT65, aprsOk ? "aprs tx" : "aprs miss", 2600 + rand(0, 600), 2600, aprsStop).then(pt => {
+            if (aprsOk) { flashDot(FT65, "#5dade2"); return; }
             const tag = document.createElementNS(NS, "text");
             tag.setAttribute("x", pt.x); tag.setAttribute("y", pt.y - 12);
             tag.setAttribute("text-anchor", "middle"); tag.setAttribute("class", "fail-tag");
@@ -396,7 +395,11 @@ h2 {
                 await link(n, HOME, "ack", 1000);
             }
             flashDot(HOME, "#58d68d");
-        }));
+        }).concat(aprsOk ? [(async () => {
+            await sleep(rand(0, 700));
+            await link(FT65, HOME, "aprs ack", 2600 + rand(0, 600));
+            flashDot(HOME, "#58d68d");
+        })()] : []));
 
         NODES.forEach(n => {
             const r = res[n.id];
