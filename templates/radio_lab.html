@@ -158,9 +158,6 @@ h2 {
             <line x1="320" y1="602" x2="320" y2="614" stroke="#999" stroke-width="2"/>
             <text x="180" y="603" text-anchor="middle" class="node-sub">0.25 mi</text>
 
-            <!-- APRS strip: FT65 sits off the map, ~3 mi away -->
-            <line x1="600" y1="285" x2="785" y2="285" stroke="#bbb" stroke-width="1.5" stroke-dasharray="6 6" marker-end="url(#arrow)"/>
-            <text x="692" y="275" text-anchor="middle" class="node-sub">≈ 3 mi (not to scale)</text>
 
             <g id="links"></g>
             <g id="nodes"></g>
@@ -356,7 +353,10 @@ h2 {
         });
         // APRS leaves home at the same moment; succeeds ~70% of the time
         const aprsOk = Math.random() < 0.70;
-        const aprsStop = aprsOk ? 1 : rand(0.35, 0.85);
+        // VHF outranges the mesh: failures always die beyond the 0.5 mi box (x 610–760)
+        const ax1 = HOME.x + HOME.r * (FT65.x - HOME.x) / Math.hypot(FT65.x - HOME.x, FT65.y - HOME.y);
+        const ax2 = FT65.x - FT65.r * (FT65.x - HOME.x) / Math.hypot(FT65.x - HOME.x, FT65.y - HOME.y);
+        const aprsStop = aprsOk ? 1 : (rand(610, 760) - ax1) / (ax2 - ax1);
         const aprs = link(HOME, FT65, "aprs", 2600 + rand(0, 600), 2600, aprsStop).then(pt => {
             if (aprsOk) { flashDot(FT65, "#f5b041"); return; }
             const tag = document.createElementNS(NS, "text");
