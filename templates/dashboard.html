@@ -162,7 +162,6 @@ h2 {
     </div>
 
     {% include "partials/nav.html" %}
-    <div style="background:white;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:14px 20px;margin:16px auto 0;max-width:480px;text-align:center;"><p style="margin:0 0 10px;color:#2c3e50;font-weight:bold;">Get notified when something interesting shows up</p><form id="subscribe-form" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;"><input type="email" id="subscribe-email" placeholder="your@email.com" required style="padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:0.9rem;min-width:200px;"><button type="submit" style="padding:8px 16px;border-radius:6px;border:2px solid #1a1a1a;background:white;font-weight:bold;cursor:pointer;">Notify Me</button></form><p id="subscribe-msg" style="margin:8px 0 0;font-size:0.85rem;color:#2e7d32;display:none;">Thanks — you're on the list!</p></div>
 
     <div class="row-top">
         <div class="live-cam">
@@ -388,12 +387,6 @@ h2 {
                 y: { min: 0, ticks: { stepSize: 1 } }
             }
         }
-    });
-    document.getElementById("subscribe-form").addEventListener("submit", function(e) {
-        e.preventDefault();
-        const email = document.getElementById("subscribe-email").value;
-        fetch("/subscribe", { method: "POST", headers: {"Content-Type":"application/x-www-form-urlencoded"}, body: "email=" + encodeURIComponent(email) })
-            .then(r => { if (r.ok) { document.getElementById("subscribe-form").style.display = "none"; document.getElementById("subscribe-msg").style.display = "block"; } });
     });
 </script>
 </body>
