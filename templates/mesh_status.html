@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="refresh" content="60">
+    <title>Live Mesh Status — Winston-Salem Bird Station</title>
+    <meta name="description" content="Live status of a 4-node Meshtastic LoRa experiment in Winston-Salem: delivery rate, signal and battery per node.">
+    <style>
+        body { font-family:-apple-system,"Segoe UI",Arial,sans-serif; margin:20px; background:#f4f6f8; color:#333; }
+        .container { max-width:900px; margin:0 auto; }
+        h1 { font-size:1.5rem; color:#1f4e79; text-align:center; margin:0 0 4px; }
+        .sub { text-align:center; color:#666; font-size:.9rem; margin:0 0 18px; }
+        .nav-bar { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-bottom:10px; }
+        .nav-link { padding:8px 14px; border:1px solid #2c3e50; border-radius:6px; text-decoration:none; color:#2c3e50; font-size:.9rem; }
+        .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+        .card { background:#fff; border-radius:10px; padding:14px; border-top:5px solid #ccc; }
+        .card.ok { border-top-color:#2e8b57; } .card.warn { border-top-color:#e0a020; } .card.down { border-top-color:#c0392b; }
+        .card h2 { margin:0 0 8px; font-size:1.1rem; color:#1f4e79; }
+        .row { display:flex; justify-content:space-between; font-size:.9rem; padding:3px 0; border-bottom:1px solid #f0f0f0; }
+        .row b { color:#2c3e50; }
+        table { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; margin-top:18px; font-size:.85rem; }
+        th, td { padding:6px 8px; text-align:left; border-bottom:1px solid #eee; }
+        th { background:#1f4e79; color:#fff; font-weight:normal; }
+        .yes { color:#2e8b57; font-weight:bold; } .no { color:#c0392b; font-weight:bold; }
+        .err { background:#fdecea; color:#a33; padding:10px; border-radius:8px; }
+        @media (max-width:600px) { .cards { grid-template-columns:1fr; } body { margin:10px; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="text-align:center;">{% include "partials/header.html" %}</div>
+    {% include "partials/nav.html" %}
+    <h1>Live Mesh Status</h1>
+    <p class="sub">Home station → 3 nodes (relays allowed), Long Moderate, every 2 min · {{ cycles }} cycles in 24 h · updated {{ updated }} (auto-refresh 60 s)</p>
+
+    {% if err %}<p class="err">Data not available: {{ err }}</p>{% endif %}
+
+    <div class="cards">
+    {% for n in nodes %}
+        <div class="card {{ n.status }}">
+            <h2>{{ n.name }}</h2>
+            <div class="row"><span>Last delivered</span><b>{{ n.last_ok }}{% if n.age_min is not none %} ({{ n.age_min }} min ago){% endif %}</b></div>
+            <div class="row"><span>Delivery, last hour</span><b>{% if n.r1 is not none %}{{ n.r1 }}% of {{ n.n1 }}{% else %}–{% endif %}</b></div>
+            <div class="row"><span>Delivery, 24 h</span><b>{% if n.r24 is not none %}{{ n.r24 }}% of {{ n.n24 }}{% else %}–{% endif %}</b></div>
+            <div class="row"><span>Avg ACK SNR</span><b>{% if n.snr is not none %}{{ n.snr }} dB{% else %}–{% endif %}</b></div>
+            <div class="row"><span>Avg latency</span><b>{% if n.lat is not none %}{{ n.lat }} s{% else %}–{% endif %}</b></div>
+            <div class="row"><span>Battery</span><b>{% if n.batt is not none %}{{ n.batt }}%{% if n.volt %} · {{ n.volt }} V{% endif %}{% else %}–{% endif %}</b></div>
+        </div>
+    {% endfor %}
+    </div>
+
+    <table>
+        <tr><th>Time</th><th>Node</th><th>Delivered</th><th>Route</th><th>SNR</th><th>Latency</th><th>Note</th></tr>
+        {% for r in recent %}
+        <tr>
+            <td>{{ r.time }}</td><td>{{ r.name }}</td>
+            <td class="{{ 'yes' if r.ok else 'no' }}">{{ 'yes' if r.ok else 'no' }}</td>
+            <td>{{ r.route }}</td>
+            <td>{{ r.snr if r.snr is not none else '–' }}</td>
+            <td>{{ '%.1f s'|format(r.lat) if r.lat is not none else '–' }}</td>
+            <td>{{ '' if r.ok else r.reason }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+</body>
+</html>

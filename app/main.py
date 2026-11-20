@@ -551,5 +551,8 @@ app.register_blueprint(meshmap_bp)
 from radio_lab import bp as radio_lab_bp
 app.register_blueprint(radio_lab_bp)
 
+from mesh_status import bp as mesh_status_bp
+app.register_blueprint(mesh_status_bp)
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, threaded=True)
