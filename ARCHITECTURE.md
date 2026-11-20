@@ -3,6 +3,24 @@
 > **Purpose of this file:** a single, always-up-to-date map of the codebase so anyone (human or AI assistant) can get oriented in under a minute — what exists, where it lives, and how the pieces connect. Update it whenever structure changes (new route, new template, new pipeline stage). Treat it as the source of truth that outlives any one chat session.
 >
 > Last verified against commit: `f6daf69` ("Revert \"add missing viewport meta tag to dashboard/alltime/history...\""), 2026-08-22 — a fresh line-by-line pass over every file in the repo, not just a diff of the previous version of this doc. Section 7 (deployment/ops) is the exception: this pass had no SSH access to the Pi, so that section still reflects the last SSH-confirmed snapshot (2026-08-20) except where the code itself proves a claim wrong.
+>
+> **2026-11-20 update:** §0 (whole-Pi map), §2 tree, §7 and the new §8 (meshlab) re-checked against a Pi inventory taken 2026-11-20 and repo HEAD of 2026-11-16 ("Radio lab: remove Simulated Preview badge"). §3–§6 not re-verified line by line in this pass.
+
+## 0. The whole Pi at a glance (read this first)
+
+One Raspberry Pi 4 hosts **three separate code bases**. Only one of them is this repo.
+
+| Folder on Pi | What it is | Git remote | Who owns the code |
+|---|---|---|---|
+| `~/BirdNET-Pi` | Acoustic bird ID engine (recording, analysis, `birds.db`) | `Nachtzuster/BirdNET-Pi` (upstream, **not a fork**) | Upstream project — do not edit |
+| `~/birdnet` | **This repo**: Flask website + MLOps pipeline | `dclengacher/winstonsalembirds` (public) | David |
+| `~/mesh` | Meshtastic experiments ("meshlab"): logger, experiment scripts, results | **None yet** → `dclengacher/meshlab` (planned) | David |
+
+Data flows one way: `~/BirdNET-Pi` and `~/mesh` **write** their own data; `~/birdnet` only **reads** it (`birds.db`, `~/mesh/meshmap.db`) and never imports their code.
+
+**Sync rule (all repos):** the Pi is the only place code is edited. Edit → test → commit → push. Never edit on GitHub's website. Data, databases, logs and keys are never committed.
+
+**Other stuff in `~` (not part of any repo):** `ga_project/` (weekly GA insights cron), `garden/` (retired garden system), loose test media (`*.wav`, `*.jpg`), `birdnet_backup_2026-07-20/`, `BirdNET-Pi~` (stray copy). Candidates for cleanup, not dependencies.
 
 ## 1. What this project is
 
@@ -17,8 +35,12 @@ The app itself runs **on the Raspberry Pi**, not on a conventional host — see 
 ```
 .
 ├── app/                        # The Flask web application (what serves the live site)
-│   ├── main.py                 # Single-file Flask app: routes, DB queries, page data-prep,
-│   │                            # eBird polling thread, camera-snapshot thread
+│   ├── main.py                 # Core Flask app: routes, DB queries, page data-prep,
+│   │                            # eBird polling thread, camera-snapshot thread; registers the blueprints below
+│   ├── species_models.py       # Blueprint: /species-models and /bird-models (production model pages)
+│   ├── call_flow.py            # Blueprint: /call-flow (7-day detection flow decomposition)
+│   ├── radio_lab.py            # Blueprint: /radio-lab (client-side simulated mesh animation, no DB)
+│   ├── meshmap_page.py         # Blueprint: /meshmap — READS ~/mesh/meshmap.db (read-only), draws LoRa coverage map
 │   ├── push_alltime.py         # Cron/manual script: pushes all-time species table to Cloudflare Worker fallback
 │   └── push_snapshot.py        # Cron/manual script: pushes "top species today" snapshot to the same fallback
 │
@@ -29,7 +51,12 @@ The app itself runs **on the Raspberry Pi**, not on a conventional host — see 
 │   ├── dueling_models.html     # "/dueling-models" — side-by-side comparison of two statistical models
 │   ├── seasonal_trends.html    # "/seasonal-trends" — 26-week rolling share-of-detections by species
 │   ├── analytics.html          # "/analytics" — model/promotion internals, charts, formulas (the "nerd" page)
-│   └── history.html            # "/history" — project build log / hardware story, with photos
+│   ├── history.html            # "/history" — project build log / hardware story, with photos
+│   ├── species_models.html     # "/species-models" (+ "/bird-models")
+│   ├── call_flow.html          # "/call-flow"
+│   ├── radio_lab.html          # "/radio-lab" — Communications & Radio Science Lab landing
+│   ├── meshmap.html            # "/meshmap" — Leaflet map, green = ACKed, red = missed
+│   └── partials/               # header.html, nav.html — shared two-group nav (Birds / Radio Lab)
 │
 ├── static/
 │   ├── Dashboard.png            # og:image / social preview screenshot
@@ -130,7 +157,29 @@ Two independent modeling scripts both consume `extracted_data.csv` (each capped 
   - every 10 min: `push_snapshot.py` and `push_alltime.py` (Cloudflare Worker fallback)
   - `15 21 * * *`: `mlops/scripts/trigger_check.py` (via `mlops_venv`) — the actual gate for the production model retrain (see §6)
   - `55 23 * * *`: `mlops/scripts/train_categorical.py` (via `mlops_venv`) — feeds the `/dueling-models` experiment comparison, **not** `bird_models.html` (correcting the previous version of this doc — see §6)
+- **Inventory 2026-11-20 (SSH-confirmed):**
+  - Services running: `birdnet-flask`, `birdnet-tunnel`, `caddy`, BirdNET-Pi suite (`birdnet_analysis`, `birdnet_recording`, `birdnet_log`, `birdnet_stats`, `chart_viewer`, `livestream`, `spectrogram_viewer`, `web_terminal`), and **`meshmap`** (meshlab — see §8).
+  - Cron unchanged from the list above, plus `0 8 * * 1` weekly `~/ga_project/ga_insights.py` (not part of this repo).
+  - **`~/BirdNET-Pi` has untracked custom files** inside the upstream clone: `ecowitt_receiver.py`, `requirements_custom.txt`, `model/labels_flickr.txt`, `scripts/backups/` (the hourly `birds.db` backups), `cloudflared.deb`, `filesystem.txt`, a modified `templates/bashrc`, and three junk files named `+`, `=`, `@@` (bad paste). None of this is backed up by any repo. Decide per file: move into this repo, into meshlab, or delete.
+  - `~/birdnet` git status not re-checked in this pass.
 - **Known drift risk:** the live `templates/` and `app/` dirs on the Pi contain several gitignored `.bak*` files (e.g. `main.py.bak` through `.bak8`, `dashboard.html.bak2-4`, `history.html.bak*`) — manual rollback copies from past edits, not tracked in git. As of the last SSH check, `git status` on the Pi showed a clean tree, so no *uncommitted* drift at that time — but these backups are a sign edits have sometimes happened directly on the Pi rather than through the repo, and this pass could not re-confirm the tree is still clean. Worth pushing any real change through git so this doc and the live site can't silently diverge.
+
+## 8. Meshlab (separate project, feeds the Radio Lab pages)
+
+Meshtastic LoRa experiments live in `~/mesh`, **not** in this repo. This repo only contains the read-only page that displays their results.
+
+- **Hardware:** Heltec V4 "Broad St Station" (`!1ba2a430`) on Pi USB (`/dev/ttyACM0`), 30 dBm; SenseCAP T1000-E (`!c1ce9509`) mobile; more nodes arriving.
+- **Python env:** `~/mesh-venv` (separate from BirdNET and `mlops_venv`). CLI: `~/mesh-venv/bin/meshtastic`.
+- **Logger:** `~/mesh/meshmap.py` run by `meshmap.service`. Sends an ACK-requested DM to the T1000 every `INTERVAL` seconds (1200 at home, 60 for drive tests) and logs sends/ACKs/SNR/RSSI and T1000 positions to `~/mesh/meshmap.db`.
+- **Experiments:** `~/mesh/exp1.py` etc. → one CSV row per packet in `~/mesh/*.csv`.
+- **One USB client at a time:** stop `meshmap` before running the CLI or any experiment script.
+- **Display:** `app/meshmap_page.py` + `templates/meshmap.html` in this repo read `meshmap.db` read-only.
+- Details, decisions and lessons: `LEARNINGS.md` in the meshlab repo.
+
+## Changelog — 2026-11-20
+- Added §0 whole-Pi map (three code bases, ownership, one-way sync rule) and §8 meshlab.
+- §2 tree updated with blueprints (`species_models`, `call_flow`, `radio_lab`, `meshmap_page`) and new templates/partials.
+- §7: 2026-11-20 inventory — `meshmap` service, GA cron, untracked custom files inside the upstream `~/BirdNET-Pi` clone.
 
 ---
 *This doc is maintained by hand (or by an assistant with repo access) alongside code changes — it is not auto-generated. If you change routes, templates, or the pipeline, update the relevant section above in the same change.*
